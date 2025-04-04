@@ -2,7 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 import "./FileUpload.css";
 
-const FileUpload = ({ contract, account, provider }) => {
+const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState("No file selected");
   const [uploading, setUploading] = useState(false);
@@ -88,6 +88,9 @@ const FileUpload = ({ contract, account, provider }) => {
       setFileName("No file selected");
       setFile(null);
       setFilePreview(null);
+      
+      // Trigger file refresh in parent component
+      triggerRefresh();
     } catch (e) {
       console.error("Error uploading file:", e);
       alert("Failed to upload file. Please try again.");

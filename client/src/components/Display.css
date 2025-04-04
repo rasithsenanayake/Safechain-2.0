@@ -71,14 +71,7 @@
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
 }
 
-.file-select-checkbox {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-}
+
 
 .delete-button {
   background-color: var(--error);
@@ -393,4 +386,36 @@ input[type="text"]:focus {
 
 .file-generic .file-preview-icon {
   background-color: #f5f5f5;
+}
+
+.display-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.tab-title {
+  color: var(--primary-blue);
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.loading-indicator {
+  text-align: center;
+  padding: 2rem;
+  color: var(--primary-blue);
+  font-weight: 500;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin: 1rem auto;
+  max-width: 600px;
+}
+
+.file-owner {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 8px;
 }

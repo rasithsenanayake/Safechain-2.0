@@ -5,6 +5,7 @@ import FileUpload from "./components/FileUpload";
 import Display from "./components/Display";
 import Modal from "./components/Modal";
 import Header from "./components/Header";
+import TabSelector from "./components/TabSelector";
 import "./App.css";
 
 function App() {
@@ -12,6 +13,12 @@ function App() {
   const [contract, setContract] = useState(null);
   const [provider, setProvider] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("myFiles"); // New state for tab selection
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Trigger for refreshing files
+
+  const triggerRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   const connectWallet = async () => {
     try {
@@ -56,7 +63,7 @@ function App() {
           const address = await signer.getAddress();
           setAccount(address);
 
-          let contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+          let contractAddress = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Fixed contract address
           const contract = new ethers.Contract(
             contractAddress,
             Upload.abi,
@@ -65,6 +72,7 @@ function App() {
 
           setContract(contract);
           setProvider(provider);
+          triggerRefresh(); // Refresh files when account changes
         } else {
           disconnectWallet();
         }
@@ -114,8 +122,20 @@ function App() {
               account={account}
               provider={provider}
               contract={contract}
+              triggerRefresh={triggerRefresh}
             />
-            <Display contract={contract} account={account} />
+            
+            <TabSelector 
+              activeTab={activeTab} 
+              setActiveTab={setActiveTab} 
+            />
+            
+            <Display 
+              contract={contract} 
+              account={account} 
+              activeTab={activeTab}
+              refreshTrigger={refreshTrigger}
+            />
           </>
         )}
       </main>
