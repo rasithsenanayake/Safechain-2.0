@@ -5,6 +5,7 @@ import "./FileShareModal.css";
 const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
 
   const handleAddressChange = (e) => {
     setAddress(e.target.value);
@@ -16,16 +17,47 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       return;
     }
     
+    if (fileIndex === null || fileIndex === undefined) {
+      alert("File index is not valid. Please try again.");
+      return;
+    }
+    
     setLoading(true);
+    setStatus("Processing...");
     
     try {
+      // First, grant general access to make sure they can connect
+      // This step ensures the user is added to the access list
+      setStatus("Granting basic access...");
+      const allowTx = await contract.allow(address);
+      await allowTx.wait();
+      
+      // Then, specifically share the individual file
+      setStatus("Sharing file...");
       const tx = await contract.shareFile(address, fileIndex);
       await tx.wait();
+      
+      setStatus("Success!");
       alert(`"${fileName}" has been shared with ${address}`);
       setModalOpen(false);
     } catch (error) {
       console.error("Error sharing file:", error);
-      alert("Failed to share file. Please try again.");
+      setStatus("Failed!");
+      
+      // More detailed error message
+      let errorMessage = "Failed to share file. ";
+      
+      if (error.message.includes("invalid BigNumber")) {
+        errorMessage += "Invalid file index. This may be a data formatting issue.";
+      } else if (error.message.includes("Invalid index")) {
+        errorMessage += "Invalid file index. The file may have been deleted or moved.";
+      } else if (error.message.includes("gas")) {
+        errorMessage += "Transaction failed due to gas estimation. Try again.";
+      } else {
+        errorMessage += "Please try again. Error: " + error.message;
+      }
+      
+      alert(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -50,6 +82,12 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
             onChange={handleAddressChange}
           />
         </div>
+        
+        {status && (
+          <div className={`status-message ${status === "Failed!" ? "error" : ""}`}>
+            {status}
+          </div>
+        )}
         
         <div className="footer">
           <button
