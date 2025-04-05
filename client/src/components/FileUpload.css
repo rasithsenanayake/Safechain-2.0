@@ -9,24 +9,34 @@ input[type="file"] {
 }
 
 .choose {
-  background-image: linear-gradient(-180deg, var(--secondary-blue), var(--primary-blue));
+  background-color: var(--primary-blue);
+  color: white;
+  border: none;
   border-radius: 6px;
-  color: #ffffff;
-  padding: 12px 25px;
-  font-size: 16px;
-  font-family: 'Poppins', sans-serif;
+  padding: 12px 32px;
+  font-size: 15px;
+  font-family: 'Inter', sans-serif;
   font-weight: 500;
   cursor: pointer;
-  display: inline-block;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  margin-bottom: 1rem;
+  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1.5rem auto;
+  min-width: 160px;
 }
 
 .choose:hover {
-  box-shadow: 0 8px 15px rgba(21, 101, 192, 0.3);
-  transform: translateY(-2px);
-  background-image: linear-gradient(-180deg, var(--accent-blue), var(--secondary-blue));
+  background-color: var(--dark-blue);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.15);
+}
+
+.choose:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
 }
 
 .textArea {
@@ -36,35 +46,29 @@ input[type="file"] {
 }
 
 .upload {
-  background-color: var(--success);
-  color: #ffffff;
-  padding: 12px 25px;
+  background-color: var(--primary-blue);
+  color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 16px;
-  font-family: 'Poppins', sans-serif;
+  border-radius: 4px;
+  padding: 12px 25px;
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
   width: 100%;
   max-width: 400px;
 }
 
 .upload:hover {
-  background-color: #2e7d32;
-  box-shadow: 0 8px 15px rgba(67, 160, 71, 0.3);
-  transform: translateY(-2px);
+  background-color: var(--dark-blue);
 }
 
 .upload:disabled,
 .upload[disabled] {
-  border: none;
-  background-color: #cccccc;
-  color: #666666;
+  background-color: #e2e8f0;
+  color: #94a3b8;
   cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
 }
 
 div {

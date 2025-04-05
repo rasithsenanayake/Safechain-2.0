@@ -182,16 +182,20 @@ contract Upload {
   function shareFile(address user, uint fileIndex) external {
       require(fileIndex < value[msg.sender].length, "Invalid file index");
       
-      // Grant access to the specific file
+      // Grant individual file access
       individualFileAccess[msg.sender][fileIndex][user] = true;
       
-      // Also add them to the access list if they haven't been added yet
+      // Add to access list if not already present
       if (!previousData[msg.sender][user]) {
-          accessList[msg.sender].push(Access(user, false));  // They don't get global access
-          previousData[msg.sender][user] = true;  // Mark as previously added
+          accessList[msg.sender].push(Access(user, false));
+          previousData[msg.sender][user] = true;
       }
       
+      // Also grant basic access to ensure visibility
+      ownership[msg.sender][user] = true;
+      
       emit FileAccessGranted(msg.sender, user, fileIndex);
+      emit AccessGranted(msg.sender, user);
   }
   
   /**

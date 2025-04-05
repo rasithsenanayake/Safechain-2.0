@@ -28,13 +28,14 @@ function App() {
       const address = await signer.getAddress();
       setAccount(address);
       
-      // Make sure this matches the contract address used in accountsChanged event listener
-      let contractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+      // Use the same contract address throughout the app
+      let contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
       const contract = new ethers.Contract(
         contractAddress,
         Upload.abi,
         signer
       );
+      console.log("Contract connected:", contract.address);
       
       setContract(contract);
       setProvider(provider);
