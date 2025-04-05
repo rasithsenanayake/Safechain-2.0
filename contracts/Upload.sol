@@ -41,12 +41,24 @@ contract Upload {
   // Mapping to track individual file access permissions: owner => fileIndex => user => hasAccess
   mapping(address => mapping(uint => mapping(address => bool))) individualFileAccess;
 
+  // Add a state variable to track total users
+  uint256 public totalUsers;
+    
+  // Add mapping to track if an address is a user
+  mapping(address => bool) public isUser;
+
   /**
    * @dev Add a file URL to a user's storage
    * @param _user Address of the user who owns the file
    * @param url IPFS URL of the file
    */
   function add(address _user, string memory url) external {
+      // Register new user if not already registered
+      if (!isUser[_user]) {
+          isUser[_user] = true;
+          totalUsers++;
+      }
+      
       value[_user].push(url);
       emit FileAdded(_user, url);
   }
@@ -175,6 +187,15 @@ contract Upload {
   }
 
   /**
+   * @dev Get the number of files owned by a user
+   * @param owner Address of the user
+   * @return uint Number of files
+   */
+  function getFileCount(address owner) external view returns (uint) {
+      return value[owner].length;
+  }
+
+  /**
    * @dev Share a specific file with a user
    * @param user Address of the user to grant access
    * @param fileIndex Index of the file to share
@@ -191,11 +212,7 @@ contract Upload {
           previousData[msg.sender][user] = true;
       }
       
-      // Also grant basic access to ensure visibility
-      ownership[msg.sender][user] = true;
-      
       emit FileAccessGranted(msg.sender, user, fileIndex);
-      emit AccessGranted(msg.sender, user);
   }
   
   /**
@@ -256,5 +273,16 @@ contract Upload {
    */
   function hasGlobalAccess(address owner, address user) external view returns (bool) {
       return ownership[owner][user];
+  }
+
+  /**
+   * @dev Get all files for a user with proper error handling
+   * @param _user Address of the user whose files to get
+   * @return Array of file URLs
+   */
+  function getUserFiles(address _user) external view returns (string[] memory) {
+      require(isUser[_user], "User has no files");
+      require(_user == msg.sender || ownership[_user][msg.sender], "Access denied");
+      return value[_user];
   }
 }

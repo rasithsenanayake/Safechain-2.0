@@ -29,9 +29,13 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
 
       // Display upload progress message
       const uploadStatusElement = document.getElementById('upload-status');
-      if (uploadStatusElement) {
-        uploadStatusElement.textContent = "Uploading to IPFS...";
-      }
+      const updateStatus = (message) => {
+        if (uploadStatusElement) {
+          uploadStatusElement.textContent = message;
+        }
+      };
+      
+      updateStatus("Uploading to IPFS...");
       
       // Add metadata to include the original file name
       const metadata = JSON.stringify({
@@ -65,9 +69,7 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
       // Format: ipfs://HASH||FILENAME
       const ImgHash = `ipfs://${resFile.data.IpfsHash}||${fileName}`;
       
-      if (uploadStatusElement) {
-        uploadStatusElement.textContent = "Adding to blockchain...";
-      }
+      updateStatus("Adding to blockchain...");
       
       // Log the ImgHash for debugging
       console.log("Storing IPFS hash with filename:", ImgHash);
@@ -77,12 +79,10 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
       await tx.wait(); // Wait for transaction to be mined
       
       // Success message
-      if (uploadStatusElement) {
-        uploadStatusElement.textContent = "Upload complete!";
-        setTimeout(() => {
-          uploadStatusElement.textContent = "";
-        }, 3000);
-      }
+      updateStatus("Upload complete!");
+      setTimeout(() => {
+        updateStatus("");
+      }, 3000);
       
       alert("File uploaded successfully!");
       setFileName("No file selected");
@@ -93,7 +93,19 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
       triggerRefresh();
     } catch (e) {
       console.error("Error uploading file:", e);
-      alert("Failed to upload file. Please try again.");
+      
+      let errorMessage = "Failed to upload file. ";
+      if (e.message?.includes("rejected")) {
+        errorMessage += "Transaction was rejected.";
+      } else if (e.message?.includes("network")) {
+        errorMessage += "Network error. Check your connection.";
+      } else if (e.message?.includes("Pinata")) {
+        errorMessage += "Error connecting to IPFS storage.";
+      } else {
+        errorMessage += "Please try again.";
+      }
+      
+      alert(errorMessage);
       
       const uploadStatusElement = document.getElementById('upload-status');
       if (uploadStatusElement) {

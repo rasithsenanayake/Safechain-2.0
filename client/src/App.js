@@ -8,6 +8,9 @@ import Header from "./components/Header";
 import TabSelector from "./components/TabSelector";
 import "./App.css";
 
+// Standardize contract address across the application
+const CONTRACT_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
+
 function App() {
   const [account, setAccount] = useState("");
   const [contract, setContract] = useState(null);
@@ -15,6 +18,7 @@ function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("myFiles"); // New state for tab selection
   const [refreshTrigger, setRefreshTrigger] = useState(0); // Trigger for refreshing files
+  const [accountChangeEnabled, setAccountChangeEnabled] = useState(false);
 
   const triggerRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
@@ -28,10 +32,9 @@ function App() {
       const address = await signer.getAddress();
       setAccount(address);
       
-      // Use the same contract address throughout the app
-      let contractAddress = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+      // Use the constant contract address
       const contract = new ethers.Contract(
-        contractAddress,
+        CONTRACT_ADDRESS,
         Upload.abi,
         signer
       );
@@ -41,6 +44,44 @@ function App() {
       setProvider(provider);
     } catch (error) {
       console.error("Error connecting wallet:", error);
+    }
+  };
+
+  const changeAccount = async () => {
+    try {
+      // Force MetaMask to show the account selection modal
+      await window.ethereum.request({
+        method: 'wallet_requestPermissions',
+        params: [{ eth_accounts: {} }],
+      });
+      
+      // After user selects an account, get the selected account
+      const accounts = await window.ethereum.request({
+        method: 'eth_requestAccounts',
+      });
+      
+      if (accounts.length > 0) {
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        const address = await signer.getAddress();
+        
+        // Only update if the account is different
+        if (address !== account) {
+          setAccount(address);
+        
+          const contract = new ethers.Contract(
+            CONTRACT_ADDRESS,
+            Upload.abi,
+            signer
+          );
+          
+          setContract(contract);
+          setProvider(provider);
+          triggerRefresh();
+        }
+      }
+    } catch (error) {
+      console.error("Error changing account:", error);
     }
   };
 
@@ -57,30 +98,37 @@ function App() {
         window.location.reload();
       });
 
-      // Listen for account changes
-      window.ethereum.on("accountsChanged", async (accounts) => {
-        if (accounts.length > 0) {
-          const provider = new ethers.providers.Web3Provider(window.ethereum);
-          const signer = provider.getSigner();
-          const address = await signer.getAddress();
-          setAccount(address);
+      // Only listen to account changes if enabled
+      if (accountChangeEnabled) {
+        window.ethereum.on("accountsChanged", async (accounts) => {
+          if (accounts.length > 0) {
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            const signer = provider.getSigner();
+            const address = await signer.getAddress();
+            setAccount(address);
 
-          let contractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"; // Fixed contract address
-          const contract = new ethers.Contract(
-            contractAddress,
-            Upload.abi,
-            signer
-          );
+            const contract = new ethers.Contract(
+              CONTRACT_ADDRESS,
+              Upload.abi,
+              signer
+            );
 
-          setContract(contract);
-          setProvider(provider);
-          triggerRefresh(); // Refresh files when account changes
-        } else {
-          disconnectWallet();
-        }
-      });
+            setContract(contract);
+            setProvider(provider);
+            triggerRefresh();
+          } else {
+            disconnectWallet();
+          }
+        });
+      }
+      
+      // Return cleanup function to remove event listeners
+      return () => {
+        window.ethereum.removeListener("chainChanged", () => {});
+        window.ethereum.removeListener("accountsChanged", () => {});
+      };
     }
-  }, []);
+  }, [accountChangeEnabled]); // Only re-run if accountChangeEnabled changes
 
   useEffect(() => {
     // Auto connect if previously connected
@@ -101,7 +149,8 @@ function App() {
     <div className="App">
       <Header 
         account={account} 
-        connectWallet={connectWallet} 
+        connectWallet={connectWallet}
+        changeAccount={changeAccount}
         disconnectWallet={disconnectWallet}
         setModalOpen={setModalOpen}
         provider={provider}

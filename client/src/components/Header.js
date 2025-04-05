@@ -1,45 +1,49 @@
 import React, { useState, useEffect } from "react";
 import "./Header.css";
 
-const Header = ({ account, connectWallet, disconnectWallet, setModalOpen, provider }) => {
-  const [ensName, setEnsName] = useState(null);
+const Header = ({ account, connectWallet, changeAccount, disconnectWallet, setModalOpen, provider }) => {
   const [accountName, setAccountName] = useState("My Account");
 
-  // Try to resolve ENS name when account changes
+  // Only try to resolve ENS name when account changes
   useEffect(() => {
-    const resolveEns = async () => {
-      if (account && provider) {
-        try {
-          // Try to get wallet name from MetaMask
-          if (window.ethereum && window.ethereum.request) {
+    const resolveAccountName = async () => {
+      if (!account) return;
+      
+      try {
+        // Skip ENS lookup on networks that don't support it
+        if (provider) {
+          const network = await provider.getNetwork();
+          // Only try ENS lookup on mainnet or recognized test networks
+          const ensEnabledNetworks = [1, 3, 4, 5, 42]; // mainnet, ropsten, rinkeby, goerli, kovan
+          
+          if (ensEnabledNetworks.includes(network.chainId)) {
             try {
-              // First try to get ENS name
               const name = await provider.lookupAddress(account);
               if (name) {
-                setEnsName(name);
                 setAccountName(name);
-              } else {
-                // If no ENS name, try to get the user-defined account name from MetaMask
-                // This is a non-standard approach that might work for MetaMask
-                const accounts = await window.ethereum.request({ method: 'wallet_getPermissions' });
-                const accountLabel = accounts[0]?.name || "Account";
-                setAccountName(accountLabel);
+                return;
               }
-            } catch (err) {
-              console.error("Error getting account name:", err);
-              setAccountName("My Account");
+            } catch (ensError) {
+              console.log("ENS lookup not available:", ensError.message);
             }
           }
-        } catch (error) {
-          console.error("Error resolving account info:", error);
-          setEnsName(null);
-          setAccountName("My Account");
         }
+        
+        // Fallback to shortened account address
+        setAccountName(formatAddress(account));
+      } catch (error) {
+        console.log("Error resolving account info:", error.message);
+        setAccountName(formatAddress(account));
       }
     };
     
-    resolveEns();
+    resolveAccountName();
   }, [account, provider]);
+
+  // Helper function to format address
+  const formatAddress = (address) => {
+    return address ? `${address.substring(0, 6)}...${address.substring(address.length - 4)}` : "My Account";
+  };
 
   return (
     <header className="app-header">
@@ -53,9 +57,12 @@ const Header = ({ account, connectWallet, disconnectWallet, setModalOpen, provid
               <div className="account-info">
                 <span className="account-name">{accountName}</span>
                 <span className="account-address">
-                  {account.slice(0, 6)}...{account.slice(-4)}
+                  {formatAddress(account)}
                 </span>
               </div>
+              <button className="header-button change-account-btn" onClick={changeAccount}>
+                Change Account
+              </button>
               <button className="header-button share-btn" onClick={() => setModalOpen(true)}>
                 Share Access
               </button>

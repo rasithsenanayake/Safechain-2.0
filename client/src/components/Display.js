@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import FileShareModal from "./FileShareModal";
 import "./Display.css";
 
@@ -13,68 +13,76 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
     originalIndex: null // Add this field to track the actual contract index
   });
 
-  // Automatically fetch files when component mounts, account changes, 
-  // files are uploaded, or tab is switched
-  useEffect(() => {
-    if (contract && account) {
-      fetchFiles();
-    }
-  }, [contract, account, refreshTrigger, activeTab]);
-
-  const fetchFiles = async () => {
-    if (!contract || !account) {
-      return;
-    }
-
+  // Use useCallback for fetchFiles to avoid dependency warnings
+  const fetchFiles = useCallback(async () => {
+    if (!contract || !account) return;
     setLoading(true);
-    setSelectedFiles([]);
-
+    
     try {
       let dataArray;
       
       if (activeTab === "myFiles") {
-        console.log("Fetching own files for:", account);
-        dataArray = await contract.display(account);
+        try {
+          // Try using the safer getUserFiles method first
+          dataArray = await contract.getUserFiles(account);
+        } catch (error) {
+          // Fall back to display method if getUserFiles isn't available
+          dataArray = await contract.display(account);
+        }
       } else {
+        // Shared files tab
         try {
           const accessList = await contract.shareAccess();
           let sharedFiles = [];
-          
-          // Get unique addresses from access list
-          const accounts = [...new Set(accessList.map(access => access.user))];
-          
-          for (const ownerAddress of accounts) {
-            if (ownerAddress === account) continue;
+
+          // Optimize the shared files fetching logic
+          for (const access of accessList) {
+            const ownerAddress = access.user;
             
+            if (ownerAddress === account) continue;
+
             try {
-              // Check both global and individual file access
+              // Check global access
               const hasGlobalAccess = await contract.hasGlobalAccess(ownerAddress, account);
               
               if (hasGlobalAccess) {
-                // Fetch all files if global access is granted
-                const files = await contract.display(ownerAddress);
-                const filesWithOwner = files.map(file => `${file}||OWNER:${ownerAddress}`);
-                sharedFiles.push(...filesWithOwner);
+                try {
+                  const ownerFiles = await contract.display(ownerAddress);
+                  const filesWithOwner = ownerFiles.map(file => 
+                    `${file}||OWNER:${ownerAddress}`
+                  );
+                  sharedFiles = [...sharedFiles, ...filesWithOwner];
+                } catch (err) {
+                  console.warn(`Error fetching global files from ${ownerAddress}`);
+                }
               }
               
-              // Check individual files regardless of global access
-              const ownerFiles = await contract.display(ownerAddress);
-              for (let i = 0; i < ownerFiles.length; i++) {
+              // Get file count to avoid out-of-bounds errors
+              let fileCount;
+              try {
+                fileCount = await contract.getFileCount(ownerAddress);
+              } catch {
+                fileCount = 20; // Fallback if getFileCount is unavailable
+              }
+              
+              // Check individual files
+              for (let i = 0; i < fileCount; i++) {
                 try {
                   const hasAccess = await contract.hasFileAccess(ownerAddress, i, account);
                   if (hasAccess) {
                     const fileData = await contract.displayFile(ownerAddress, i);
                     sharedFiles.push(`${fileData}||OWNER:${ownerAddress}||INDEX:${i}`);
                   }
-                } catch (err) {
-                  console.warn(`Error checking file ${i} access:`, err);
+                } catch {
+                  // Skip files that can't be accessed
+                  continue;
                 }
               }
             } catch (err) {
-              console.error(`Error checking access for ${ownerAddress}:`, err);
+              console.warn(`Error processing files from ${ownerAddress}: ${err.message}`);
             }
           }
-          
+
           dataArray = [...new Set(sharedFiles)]; // Remove duplicates
         } catch (err) {
           console.error("Error fetching shared files:", err);
@@ -82,15 +90,22 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
         }
       }
 
-      console.log("Files fetched:", dataArray);
       setData(dataArray || []);
     } catch (e) {
-      console.error("Error fetching data:", e);
+      console.error("Error in fetchFiles:", e);
       setData([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [contract, account, activeTab]);
+
+  // Automatically fetch files when component mounts, account changes, 
+  // files are uploaded, or tab is switched
+  useEffect(() => {
+    if (contract && account) {
+      fetchFiles();
+    }
+  }, [contract, account, refreshTrigger, activeTab, fetchFiles]);
 
   const removeFile = async (index) => {
     if (!contract) {
@@ -180,23 +195,34 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
     setFileShareModalOpen(true);
   };
 
+  // Optimize parseFileInfo for better file handling
   const parseFileInfo = (item) => {
-    console.log("Parsing file info:", item);
-    // Parse the file info string which may contain file URL, name, owner info, and index
     let ipfsUrl, fileName, owner = null, fileIndex = null;
     
     const parts = item.split("||");
     ipfsUrl = parts[0];
     
-    // Extract filename from ipfs url if no name provided
-    fileName = parts[1] || ipfsUrl.split("/").pop() || "File";
+    // Process each part to extract metadata
+    for (let i = 1; i < parts.length; i++) {
+      if (parts[i].startsWith("OWNER:")) {
+        owner = parts[i].substring(6);
+      } else if (parts[i].startsWith("INDEX:")) {
+        fileIndex = parseInt(parts[i].substring(6), 10);
+      } else if (parts[i]) {
+        fileName = parts[i];
+      }
+    }
+    
+    // Extract filename from IPFS hash if not found
+    if (!fileName) {
+      fileName = ipfsUrl.split("/").pop() || "File";
+    }
     
     const imageUrl = ipfsUrl.startsWith("ipfs://")
       ? `https://gateway.pinata.cloud/ipfs/${ipfsUrl.substring(7)}`
       : ipfsUrl;
     
-    console.log("Processed file:", { ipfsUrl, fileName, imageUrl });
-    return { ipfsUrl, fileName, imageUrl, owner, fileIndex };
+    return { fileName, imageUrl, owner, fileIndex };
   };
 
   return (

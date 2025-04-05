@@ -93,6 +93,7 @@ div {
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
   margin-bottom: 2rem;
   font-family: 'Poppins', sans-serif;
+  text-align: center;
 }
 
 .upload-title {

@@ -1,22 +1,36 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import "./Modal.css";
 
 const Modal = ({ setModalOpen, contract }) => {
+  const [address, setAddress] = useState("");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(false);
+  
+  const handleAddressChange = (e) => {
+    setAddress(e.target.value);
+  };
+
   const sharing = async () => {
-    const address = document.querySelector(".address-input").value;
     if (!address || !ethers.utils.isAddress(address)) {
       alert("Please enter a valid Ethereum address");
       return;
     }
     
+    setLoading(true);
+    setStatus("Processing...");
+    
     try {
       await contract.allow(address);
+      setStatus("Success!");
       setModalOpen(false);
       alert("Access granted successfully!");
     } catch (error) {
       console.error("Error sharing access:", error);
+      setStatus("Failed!");
       alert("Failed to grant access. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
   
@@ -64,8 +78,16 @@ const Modal = ({ setModalOpen, contract }) => {
             type="text"
             className="address-input"
             placeholder="Enter Ethereum Address (0x...)"
+            value={address}
+            onChange={handleAddressChange}
           />
         </div>
+        
+        {status && (
+          <div className={`status-message ${status === "Failed!" ? "error" : ""}`}>
+            {status}
+          </div>
+        )}
         
         <div className="access-list">
           <label htmlFor="selectNumber">People with access:</label>
@@ -81,7 +103,9 @@ const Modal = ({ setModalOpen, contract }) => {
           >
             Cancel
           </button>
-          <button onClick={sharing}>Share</button>
+          <button onClick={sharing} disabled={loading}>
+            {loading ? "Processing..." : "Share"}
+          </button>
         </div>
       </div>
     </div>
