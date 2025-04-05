@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import FileShareModal from "./FileShareModal";
 import "./Display.css";
 
@@ -7,17 +7,14 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
   const [loading, setLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [fileShareModalOpen, setFileShareModalOpen] = useState(false);
-  const [fileToShare, setFileToShare] = useState({ index: null, name: "" });
+  const [fileToShare, setFileToShare] = useState({ 
+    index: null,
+    name: "",
+    originalIndex: null // Add this field to track the actual contract index
+  });
 
-  // Automatically fetch files when component mounts, account changes, 
-  // files are uploaded, or tab is switched
-  useEffect(() => {
-    if (contract && account) {
-      fetchFiles();
-    }
-  }, [contract, account, refreshTrigger, activeTab]);
-
-  const fetchFiles = async () => {
+  // Move fetchFiles into useCallback to avoid dependency issues
+  const fetchFiles = useCallback(async () => {
     if (!contract || !account) {
       return;
     }
@@ -32,33 +29,89 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
         // Fetch user's own files
         dataArray = await contract.display(account);
       } else {
-        // For shared files tab, we need to fetch from other accounts
-        // This is a placeholder - we need to implement shared files view
-        const accessList = await contract.shareAccess();
-        
-        // Create an array to hold all shared files
-        let sharedFiles = [];
-        
-        // For each account that has shared with the current user
-        for (let i = 0; i < accessList.length; i++) {
-          if (accessList[i].access) {
+        // For shared files tab, we need a different approach
+        try {
+          // Get the list of users who might have shared with the current user
+          const accessList = await contract.shareAccess();
+          
+          // Create an array to hold all shared files
+          let sharedFiles = [];
+          
+          // First, try to find other accounts that have shared with us
+          const accounts = accessList.map(access => access.user);
+          
+          // Loop through these accounts to check if we have access to their files
+          for (let i = 0; i < accounts.length; i++) {
+            const ownerAddress = accounts[i];
+            
+            // Skip our own account
+            if (ownerAddress === account) continue;
+            
             try {
-              // Attempt to get files from each account that has shared access
-              const ownerAddress = accessList[i].user;
-              const filesFromOwner = await contract.display(ownerAddress);
+              // Check if we have access to this owner's files - use the renamed function
+              const hasAccess = await contract.hasGlobalAccess(ownerAddress, account);
               
-              // Add owner information to each file
-              const filesWithOwner = filesFromOwner.map(file => {
-                return `${file}||OWNER:${ownerAddress}`;
-              });
-              
-              sharedFiles = [...sharedFiles, ...filesWithOwner];
+              if (hasAccess) {
+                // We have access to all files from this owner
+                try {
+                  const filesFromOwner = await contract.display(ownerAddress);
+                  // Add owner info to each file
+                  const filesWithOwner = filesFromOwner.map(file => {
+                    return `${file}||OWNER:${ownerAddress}`;
+                  });
+                  
+                  sharedFiles = [...sharedFiles, ...filesWithOwner];
+                } catch (err) {
+                  console.error(`Error fetching files from ${ownerAddress}:`, err);
+                }
+              } else {
+                // We might have access to individual files
+                try {
+                  // Need to somehow get the file count for this owner
+                  // This is a limitation - we'll try a reasonable number
+                  const MAX_FILES_TO_CHECK = 50; 
+                  
+                  for (let j = 0; j < MAX_FILES_TO_CHECK; j++) {
+                    try {
+                      // Check if we have access to this specific file
+                      const hasIndividualAccess = await contract.hasFileAccess(
+                        ownerAddress, 
+                        j, 
+                        account
+                      );
+                      
+                      if (hasIndividualAccess) {
+                        try {
+                          // If we have access, get the file data
+                          const fileData = await contract.displayFile(ownerAddress, j);
+                          // Add owner and index info to the file
+                          const fileWithInfo = `${fileData}||OWNER:${ownerAddress}||INDEX:${j}`;
+                          sharedFiles.push(fileWithInfo);
+                        } catch (err) {
+                          // If we can't get the file data, just continue
+                          console.warn(`Could not fetch file ${j} from ${ownerAddress}`);
+                        }
+                      }
+                    } catch (err) {
+                      // Break the loop if we encounter an error (likely out of bounds)
+                      break;
+                    }
+                  }
+                } catch (err) {
+                  console.error(`Error checking individual file access for ${ownerAddress}:`, err);
+                }
+              }
             } catch (err) {
-              console.error("Error fetching shared files:", err);
+              console.error(`Error checking access for ${ownerAddress}:`, err);
             }
           }
+          
+          // Set the data array to our collected shared files
+          dataArray = sharedFiles;
+        } catch (err) {
+          console.error("Error fetching shared files:", err);
+          dataArray = [];
         }
-        dataArray = sharedFiles;
       }
 
       setData(dataArray || []);
@@ -68,7 +121,13 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [contract, account, activeTab]); // Add all dependencies used in the function
+
+  useEffect(() => {
+    if (contract && account) {
+      fetchFiles();
+    }
+  }, [contract, account, refreshTrigger, activeTab, fetchFiles]);
 
   const removeFile = async (index) => {
     if (!contract) {
@@ -129,39 +188,35 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
     link.click();
   };
 
-  const toggleFileSelection = (index) => {
-    if (selectedFiles.includes(index)) {
-      setSelectedFiles(selectedFiles.filter((i) => i !== index));
-    } else {
-      setSelectedFiles([...selectedFiles, index]);
-    }
-  };
-
-  const openShareModal = (index, fileName) => {
-    setFileToShare({ index, name: fileName });
+  const openShareModal = (displayIndex, fileName, originalIndex = null) => {
+    console.log(`Opening share modal for file index: ${originalIndex}, display index: ${displayIndex}, name: ${fileName}`);
+    setFileToShare({ 
+      index: displayIndex, 
+      name: fileName,
+      originalIndex: originalIndex !== null ? originalIndex : displayIndex
+    });
     setFileShareModalOpen(true);
   };
 
   const parseFileInfo = (item) => {
-    // Parse the file info string which may contain file URL, name, and owner info
-    let ipfsUrl, fileName, owner = null;
+    let fileName, owner = null, fileIndex = null;
     
     const parts = item.split("||");
-    ipfsUrl = parts[0];
+    const ipfsUrl = parts[0];
     
-    if (parts.length > 1) {
-      // Check if the second part contains owner information
-      if (parts[1].startsWith("OWNER:")) {
-        owner = parts[1].substring(6);
-        fileName = parts.length > 2 ? parts[2] : `File`;
+    // Extract filename, owner, and index from the parts
+    for (let i = 1; i < parts.length; i++) {
+      if (parts[i].startsWith("OWNER:")) {
+        owner = parts[i].substring(6);
+      } else if (parts[i].startsWith("INDEX:")) {
+        fileIndex = parseInt(parts[i].substring(6), 10);
       } else {
-        fileName = parts[1];
-        // Check if there's an owner part
-        if (parts.length > 2 && parts[2].startsWith("OWNER:")) {
-          owner = parts[2].substring(6);
-        }
+        fileName = parts[i];
       }
-    } else {
+    }
+    
+    // If no filename was found, use a default
+    if (!fileName) {
       fileName = `File`;
     }
     
@@ -169,7 +224,7 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
       ? `https://gateway.pinata.cloud/ipfs/${ipfsUrl.substring(7)}`
       : ipfsUrl;
       
-    return { ipfsUrl, fileName, imageUrl, owner };
+    return { fileName, imageUrl, owner, fileIndex };
   };
 
   return (
@@ -196,7 +251,7 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
       ) : data.length > 0 ? (
         <div className="image-list">
           {data.map((item, index) => {
-            const { ipfsUrl, fileName, imageUrl, owner } = parseFileInfo(item);
+            const { fileName, imageUrl, owner, fileIndex } = parseFileInfo(item);
 
             return (
               <div key={index} className="image-card">
@@ -229,7 +284,7 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
                         </button>
                         <button 
                           className="share-file-button"
-                          onClick={() => openShareModal(index, fileName)}
+                          onClick={() => openShareModal(index, fileName, fileIndex)}
                         >
                           Share
                         </button>
@@ -261,7 +316,7 @@ const Display = ({ contract, account, activeTab, refreshTrigger }) => {
         <FileShareModal
           setModalOpen={setFileShareModalOpen}
           contract={contract}
-          fileIndex={fileToShare.index}
+          fileIndex={fileToShare.originalIndex !== null ? fileToShare.originalIndex : fileToShare.index}
           fileName={fileToShare.name}
         />
       )}

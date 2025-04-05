@@ -185,9 +185,34 @@ contract Upload {
       // Grant access to the specific file
       individualFileAccess[msg.sender][fileIndex][user] = true;
       
+      // Also add them to the access list if they haven't been added yet
+      if (!previousData[msg.sender][user]) {
+          accessList[msg.sender].push(Access(user, false));  // They don't get global access
+          previousData[msg.sender][user] = true;  // Mark as previously added
+      }
+      
       emit FileAccessGranted(msg.sender, user, fileIndex);
   }
   
+  /**
+   * @dev Display a specific file if the user has access to it
+   * @param owner Address of the file owner
+   * @param fileIndex Index of the file to display
+   * @return File URL if the user has access
+   */
+  function displayFile(address owner, uint fileIndex) external view returns (string memory) {
+      require(fileIndex < value[owner].length, "Invalid file index");
+      
+      // Check if user has access to this specific file
+      bool hasAccess = (owner == msg.sender) || 
+                       ownership[owner][msg.sender] || 
+                       individualFileAccess[owner][fileIndex][msg.sender];
+                       
+      require(hasAccess, "You don't have access to this file");
+      
+      return value[owner][fileIndex];
+  }
+
   /**
    * @dev Revoke access to a specific file from a user
    * @param user Address of the user to revoke access
@@ -217,5 +242,15 @@ contract Upload {
       return (owner == user) || 
              ownership[owner][user] || 
              individualFileAccess[owner][fileIndex][user];
+  }
+
+  /**
+   * @dev Check if a user has been granted global access by an owner
+   * @param owner Address of the file owner
+   * @param user Address of the user to check
+   * @return boolean indicating if the user has global access
+   */
+  function hasGlobalAccess(address owner, address user) external view returns (bool) {
+      return ownership[owner][user];
   }
 }
