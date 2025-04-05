@@ -12,7 +12,8 @@
 }
 
 .modalContainer {
-  width: 500px;
+  width: 600px;
+  max-width: 90vw;
   border-radius: 12px;
   background-color: white;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
@@ -53,9 +54,9 @@
 .modalContainer .body {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
+  gap: 20px;
+  width: 100%;
+  padding: 0 10px;
   margin: 20px 0;
   color: var(--text-dark);
 }
@@ -65,23 +66,116 @@
   font-size: 1rem;
 }
 
+.share-section, 
+.revoke-section {
+  background-color: #f8fafc;
+  border-radius: 8px;
+  padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.share-section h3, 
+.revoke-section h3 {
+  color: var(--primary-blue);
+  font-size: 1.1rem;
+  margin-top: 0;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 10px;
+  text-align: left;
+}
+
 .address-input {
   display: block;
   width: 100%;
   height: 40px;
+  box-sizing: border-box;
   text-align: center;
   padding: 5px 15px;
   border: 2px solid #ddd;
   border-radius: 6px;
   font-family: 'Poppins', sans-serif;
   transition: all 0.3s ease;
+  margin: 10px 0;
 }
 
-.address-input:focus {
-  outline: none;
-  border-color: var(--primary-blue);
-  background-color: rgba(187, 222, 251, 0.2);
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.2);
+.action-button {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-top: 15px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.grant-button {
+  background-color: var(--primary-blue);
+  color: white;
+  border: none;
+}
+
+.grant-button:hover {
+  background-color: var(--dark-blue);
+}
+
+.revoke-button {
+  background-color: white;
+  color: var(--error);
+  border: 1px solid var(--error);
+}
+
+.revoke-button:hover {
+  background-color: #fff5f5;
+}
+
+.address-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  font-family: 'Inter', sans-serif;
+  background-color: white;
+  margin-bottom: 15px;
+}
+
+.has-access {
+  color: #047857;
+  font-weight: 500;
+}
+
+.no-access {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.no-access-message {
+  color: #6b7280;
+  font-style: italic;
+  text-align: center;
+  padding: 10px;
+}
+
+.status-message {
+  padding: 10px 15px;
+  margin: 15px 0;
+  border-radius: 6px;
+  background-color: #e6f4ea;
+  color: #0d652d;
+  font-weight: 500;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.status-message.error {
+  background-color: #fce8e6;
+  color: #c5221f;
 }
 
 .access-list {
@@ -106,25 +200,33 @@
   background-color: white;
 }
 
+.modalContainer p {
+  margin: 0 0 15px 0;
+  text-align: left;
+}
+
 .modalContainer .footer {
   display: flex;
   justify-content: center;
-  align-items: center;
+  gap: 15px;
   margin-top: 20px;
+  width: 100%;
 }
 
 .modalContainer .footer button {
+  flex: 0 0 auto;
+  min-width: 100px;
+  padding: 8px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: center;
   background-color: white;
   color: var(--text-dark);
   border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: 8px 16px;
-  font-size: 14px;
   font-family: 'Inter', sans-serif;
-  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 100px;
 }
 
 .modalContainer .footer button:hover {

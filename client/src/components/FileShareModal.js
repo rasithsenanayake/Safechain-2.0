@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import "./FileShareModal.css";
 
@@ -6,9 +6,41 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+  const [sharedWith, setSharedWith] = useState([]);
+  const [selectedAddress, setSelectedAddress] = useState("");
+
+  useEffect(() => {
+    // Fetch users who have access to this specific file
+    const fetchFileSharedUsers = async () => {
+      if (!contract || fileIndex === null || fileIndex === undefined) return;
+      
+      try {
+        setLoading(true);
+        const users = await contract.getFileSharedUsers(fileIndex);
+        
+        // Format addresses for display
+        const formattedUsers = users.map(user => ({
+          address: user,
+          displayAddress: `${user.substring(0, 6)}...${user.substring(user.length - 4)}`
+        }));
+        
+        setSharedWith(formattedUsers);
+      } catch (error) {
+        console.error("Error fetching shared users for file:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchFileSharedUsers();
+  }, [contract, fileIndex]);
 
   const handleAddressChange = (e) => {
     setAddress(e.target.value);
+  };
+
+  const handleSelectChange = (e) => {
+    setSelectedAddress(e.target.value);
   };
 
   const shareFile = async () => {
@@ -19,6 +51,13 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
     
     if (fileIndex === null || fileIndex === undefined) {
       alert("File index is not valid. Please try again.");
+      return;
+    }
+    
+    // Check if the user already has access to this file
+    const currentSharedUsers = sharedWith.map(user => user.address);
+    if (currentSharedUsers.includes(address)) {
+      alert(`${address} already has access to this file.`);
       return;
     }
     
@@ -37,9 +76,17 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       const tx = await contract.shareFile(address, fileIndex);
       await tx.wait();
       
+      // Update the shared users list
+      const users = await contract.getFileSharedUsers(fileIndex);
+      const formattedUsers = users.map(user => ({
+        address: user,
+        displayAddress: `${user.substring(0, 6)}...${user.substring(user.length - 4)}`
+      }));
+      
+      setSharedWith(formattedUsers);
       setStatus("Success!");
       alert(`"${fileName}" has been shared with ${address}`);
-      setModalOpen(false);
+      setAddress(""); // Clear the input field
     } catch (error) {
       console.error("Error sharing file:", error);
       setStatus("Failed!");
@@ -63,6 +110,46 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
     }
   };
   
+  const revokeFileAccess = async () => {
+    if (!selectedAddress || !ethers.utils.isAddress(selectedAddress)) {
+      alert("Please select a valid address");
+      return;
+    }
+    
+    if (fileIndex === null || fileIndex === undefined) {
+      alert("File index is not valid. Please try again.");
+      return;
+    }
+    
+    setLoading(true);
+    setStatus("Revoking file access...");
+    
+    try {
+      const tx = await contract.revokeFileAccess(selectedAddress, fileIndex);
+      await tx.wait();
+      
+      setStatus("Access revoked!");
+      
+      // Refresh the shared users list
+      const users = await contract.getFileSharedUsers(fileIndex);
+      const formattedUsers = users.map(user => ({
+        address: user,
+        displayAddress: `${user.substring(0, 6)}...${user.substring(user.length - 4)}`
+      }));
+      
+      setSharedWith(formattedUsers);
+      setSelectedAddress("");
+      
+      alert(`File access for "${fileName}" has been revoked from ${selectedAddress}`);
+    } catch (error) {
+      console.error("Error revoking file access:", error);
+      setStatus("Failed!");
+      alert("Failed to revoke file access. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   return (
     <div className="modalBackground">
       <div className="modalContainer">
@@ -73,7 +160,7 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
         <div className="title">Share File</div>
         
         <div className="body">
-          <p>Share "{fileName}" with a specific user</p>
+          <h3>Share "{fileName}" with a user</h3>
           <input
             type="text"
             className="address-input"
@@ -81,6 +168,53 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
             value={address}
             onChange={handleAddressChange}
           />
+          <button 
+            className="action-button"
+            onClick={shareFile} 
+            disabled={loading}
+          >
+            {loading ? "Processing..." : "Share File"}
+          </button>
+          
+          <div className="manage-sharing-section">
+            <h3>Manage File Sharing</h3>
+            {sharedWith.length > 0 ? (
+              <>
+                <p>Revoke access to this file:</p>
+                <div className="shared-users-list">
+                  <select 
+                    value={selectedAddress} 
+                    onChange={handleSelectChange}
+                    className="address-select"
+                  >
+                    <option value="">Select an address</option>
+                    {sharedWith.map((user, index) => (
+                      <option 
+                        key={index} 
+                        value={user.address}
+                      >
+                        {user.displayAddress}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {selectedAddress && (
+                    <button 
+                      className="action-button revoke-button"
+                      onClick={revokeFileAccess}
+                      disabled={loading}
+                    >
+                      {loading ? "Processing..." : "Revoke File Access"}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="no-sharing-message">
+                {loading ? "Loading..." : "This file hasn't been shared with anyone yet"}
+              </p>
+            )}
+          </div>
         </div>
         
         {status && (
@@ -94,10 +228,7 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
             onClick={() => setModalOpen(false)}
             id="cancelBtn"
           >
-            Cancel
-          </button>
-          <button onClick={shareFile} disabled={loading}>
-            {loading ? "Processing..." : "Share File"}
+            Close
           </button>
         </div>
       </div>
