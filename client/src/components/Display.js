@@ -1,323 +1,333 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import FileShareModal from "./FileShareModal";
 import "./Display.css";
 
 const Display = ({ contract, account, activeTab, refreshTrigger }) => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const [fileShareModalOpen, setFileShareModalOpen] = useState(false);
-  const [fileToShare, setFileToShare] = useState({ 
-    index: null,
-    name: "",
-    originalIndex: null // Add this field to track the actual contract index
-  });
-
-  // Move fetchFiles into useCallback to avoid dependency issues
-  const fetchFiles = useCallback(async () => {
-    if (!contract || !account) {
-      return;
-    }
-
-    setLoading(true);
-    setSelectedFiles([]);
-
-    try {
-      let dataArray;
-      
-      if (activeTab === "myFiles") {
-        // Fetch user's own files
-        dataArray = await contract.display(account);
-      } else {
-        // For shared files tab, we need a different approach
-        try {
-          // Get the list of users who might have shared with the current user
-          const accessList = await contract.shareAccess();
-          
-          // Create an array to hold all shared files
-          let sharedFiles = [];
-          
-          // First, try to find other accounts that have shared with us
-          const accounts = accessList.map(access => access.user);
-          
-          // Loop through these accounts to check if we have access to their files
-          for (let i = 0; i < accounts.length; i++) {
-            const ownerAddress = accounts[i];
-            
-            // Skip our own account
-            if (ownerAddress === account) continue;
-            
-            try {
-              // Check if we have access to this owner's files - use the renamed function
-              const hasAccess = await contract.hasGlobalAccess(ownerAddress, account);
-              
-              if (hasAccess) {
-                // We have access to all files from this owner
-                try {
-                  const filesFromOwner = await contract.display(ownerAddress);
-                  // Add owner info to each file
-                  const filesWithOwner = filesFromOwner.map(file => {
-                    return `${file}||OWNER:${ownerAddress}`;
-                  });
-                  
-                  sharedFiles = [...sharedFiles, ...filesWithOwner];
-                } catch (err) {
-                  console.error(`Error fetching files from ${ownerAddress}:`, err);
-                }
-              } else {
-                // We might have access to individual files
-                try {
-                  // Need to somehow get the file count for this owner
-                  // This is a limitation - we'll try a reasonable number
-                  const MAX_FILES_TO_CHECK = 50; 
-                  
-                  for (let j = 0; j < MAX_FILES_TO_CHECK; j++) {
-                    try {
-                      // Check if we have access to this specific file
-                      const hasIndividualAccess = await contract.hasFileAccess(
-                        ownerAddress, 
-                        j, 
-                        account
-                      );
-                      
-                      if (hasIndividualAccess) {
-                        try {
-                          // If we have access, get the file data
-                          const fileData = await contract.displayFile(ownerAddress, j);
-                          // Add owner and index info to the file
-                          const fileWithInfo = `${fileData}||OWNER:${ownerAddress}||INDEX:${j}`;
-                          sharedFiles.push(fileWithInfo);
-                        } catch (err) {
-                          // If we can't get the file data, just continue
-                          console.warn(`Could not fetch file ${j} from ${ownerAddress}`);
-                        }
-                      }
-                    } catch (err) {
-                      // Break the loop if we encounter an error (likely out of bounds)
-                      break;
-                    }
-                  }
-                } catch (err) {
-                  console.error(`Error checking individual file access for ${ownerAddress}:`, err);
-                }
-              }
-            } catch (err) {
-              console.error(`Error checking access for ${ownerAddress}:`, err);
-            }
-          }
-          
-          // Set the data array to our collected shared files
-          dataArray = sharedFiles;
-        } catch (err) {
-          console.error("Error fetching shared files:", err);
-          dataArray = [];
-        }
-      }
-
-      setData(dataArray || []);
-    } catch (e) {
-      console.error("Error fetching data:", e);
-      setData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [contract, account, activeTab]); // Add all dependencies used in the function
+  const [error, setError] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
 
   useEffect(() => {
-    if (contract && account) {
-      fetchFiles();
-    }
-  }, [contract, account, refreshTrigger, activeTab, fetchFiles]);
-
-  const removeFile = async (index) => {
-    if (!contract) {
-      alert("Please connect your wallet");
-      return;
-    }
-
-    try {
-      if (index < 0 || index >= data.length) {
-        alert("Invalid file index");
+    const fetchFiles = async () => {
+      if (!contract || !account) {
+        console.log("Contract or account not available");
         return;
       }
 
-      const tx = await contract.removeFile(index);
-      await tx.wait();
-      alert("File removed successfully!");
-      fetchFiles(); // Refresh the file list
-    } catch (e) {
-      console.error("Error removing file:", e);
-      alert(`Failed to remove file. Error: ${e.message}`);
-    }
+      setLoading(true);
+      setError("");
+      setData([]);
+      
+      try {
+        console.log(`Fetching ${activeTab} for account ${account}`);
+        console.log("Contract:", contract);
+        console.log("Contract address:", contract.address);
+        
+        // Debug available contract methods
+        const methods = Object.keys(contract.functions || {});
+        console.log("Available contract methods:", methods);
+        
+        let files = [];
+        if (activeTab === "myFiles") {
+          try {
+            console.log("Calling display method with account:", account);
+            files = await contract.display(account);
+            console.log("Raw files from display method:", files);
+          } catch (displayError) {
+            console.error("Error calling display method:", displayError);
+            throw new Error(`Failed to get your files: ${displayError.message}`);
+          }
+        } else if (activeTab === "sharedFiles") {
+          try {
+            console.log("Calling getShared method");
+            files = await contract.getShared();
+            console.log("Raw files from getShared method:", files);
+          } catch (sharedError) {
+            console.error("Error calling getShared method:", sharedError);
+            throw new Error(`Failed to get shared files: ${sharedError.message}`);
+          }
+        }
+        
+        if (!files || !Array.isArray(files)) {
+          console.error("Files data is not an array:", files);
+          throw new Error("Invalid response format from contract");
+        }
+        
+        // Filter out any null or empty values
+        const filteredFiles = files.filter(item => item && typeof item === 'string' && item.trim() !== "");
+        console.log("Filtered files:", filteredFiles);
+        
+        // Process the files data
+        const processedFiles = filteredFiles.map((item, index) => {
+            let fileName = "Unnamed File";
+            let url = item;
+            
+            // Check if the URL has the format ipfs://HASH||FILENAME
+            if (item.includes("||")) {
+              const parts = item.split("||");
+              url = parts[0]; // IPFS URL
+              fileName = parts[1]; // Original filename
+            }
+            
+            // Convert IPFS URL to gateway URL if needed
+            if (url.startsWith("ipfs://")) {
+              url = url.replace("ipfs://", "https://gateway.pinata.cloud/ipfs/");
+            }
+            
+            // Determine file type for preview
+            const fileType = getFileType(fileName);
+            
+            return { url, fileName, index, fileType };
+        });
+        
+        console.log("Processed files:", processedFiles);
+        setData(processedFiles);
+      } catch (err) {
+        console.error("Error fetching files:", err);
+        
+        // More detailed error handling
+        let errorMessage = "Failed to load files. ";
+        
+        if (err.message.includes("non-payable method")) {
+          errorMessage += "Contract interaction failed - wrong parameters";
+        } else if (err.message.includes("invalid address")) {
+          errorMessage += "Invalid account address";
+        } else if (err.code === "CALL_EXCEPTION") {
+          errorMessage += "Contract method call failed - method may not exist";
+          // Try to get more info about the contract
+          try {
+            console.log("Contract ABI:", contract.interface.format());
+          } catch (e) {
+            console.error("Could not log contract interface:", e);
+          }
+        } else {
+          errorMessage += err.message;
+        }
+        
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFiles();
+  }, [contract, account, activeTab, refreshTrigger]);
+
+  const openShareModal = (fileIndex, fileName) => {
+    setSelectedFile({ index: fileIndex, name: fileName });
+    setShareModalOpen(true);
   };
 
-  const removeSelectedFiles = async () => {
-    if (!contract) {
-      alert("Please connect your wallet");
-      return;
-    }
+  const openPreview = (file) => {
+    setPreviewFile(file);
+  };
 
-    if (selectedFiles.length === 0) {
-      alert("No files selected for deletion");
-      return;
-    }
-
-    try {
-      // Ensure all indices are valid
-      const validIndices = selectedFiles.filter((index) => index >= 0 && index < data.length);
-      if (validIndices.length === 0) {
-        alert("No valid files selected for deletion");
-        return;
-      }
-
-      const tx = await contract.removeFiles(validIndices);
-      await tx.wait();
-      alert("Selected files removed successfully!");
-      setSelectedFiles([]);
-      fetchFiles(); // Refresh the file list
-    } catch (e) {
-      console.error("Error removing files:", e);
-      alert(`Failed to remove selected files. Error: ${e.message}`);
-    }
+  const closePreview = () => {
+    setPreviewFile(null);
   };
 
   const downloadFile = (url, fileName) => {
-    const link = document.createElement("a");
+    const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
+    link.target = '_blank';
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
   };
 
-  const openShareModal = (displayIndex, fileName, originalIndex = null) => {
-    console.log(`Opening share modal for file index: ${originalIndex}, display index: ${displayIndex}, name: ${fileName}`);
-    setFileToShare({ 
-      index: displayIndex, 
-      name: fileName,
-      originalIndex: originalIndex !== null ? originalIndex : displayIndex
-    });
-    setFileShareModalOpen(true);
+  // Function to determine the file type icon
+  const getFileTypeIcon = (fileName) => {
+    if (!fileName) return '📄';
+    
+    const extension = fileName.split('.').pop().toLowerCase();
+    
+    switch (extension) {
+      case 'pdf':
+        return '📄';
+      case 'doc':
+      case 'docx':
+        return '📝';
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+        return '🖼️';
+      case 'mp4':
+      case 'avi':
+      case 'mov':
+        return '🎬';
+      case 'mp3':
+      case 'wav':
+        return '🎵';
+      case 'zip':
+      case 'rar':
+        return '🗜️';
+      case 'xls':
+      case 'xlsx':
+        return '📊';
+      case 'ppt':
+      case 'pptx':
+        return '📊';
+      default:
+        return '📄';
+    }
   };
 
-  const parseFileInfo = (item) => {
-    let fileName, owner = null, fileIndex = null;
+  // Function to determine file type
+  const getFileType = (fileName) => {
+    if (!fileName) return 'other';
     
-    const parts = item.split("||");
-    const ipfsUrl = parts[0];
+    const extension = fileName.split('.').pop().toLowerCase();
     
-    // Extract filename, owner, and index from the parts
-    for (let i = 1; i < parts.length; i++) {
-      if (parts[i].startsWith("OWNER:")) {
-        owner = parts[i].substring(6);
-      } else if (parts[i].startsWith("INDEX:")) {
-        fileIndex = parseInt(parts[i].substring(6), 10);
-      } else {
-        fileName = parts[i];
-      }
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'].includes(extension)) {
+      return 'image';
+    } else if (['mp4', 'webm', 'ogg', 'avi', 'mov', 'wmv'].includes(extension)) {
+      return 'video';
+    } else if (['mp3', 'wav', 'ogg', 'flac'].includes(extension)) {
+      return 'audio';
+    } else if (extension === 'pdf') {
+      return 'pdf';
+    } else {
+      return 'other';
     }
-    
-    // If no filename was found, use a default
-    if (!fileName) {
-      fileName = `File`;
-    }
-    
-    const imageUrl = ipfsUrl.startsWith("ipfs://")
-      ? `https://gateway.pinata.cloud/ipfs/${ipfsUrl.substring(7)}`
-      : ipfsUrl;
-      
-    return { fileName, imageUrl, owner, fileIndex };
   };
 
   return (
     <div className="display-container">
-      {activeTab === "myFiles" && (
-        <div className="display-header">
-          <h2 className="tab-title">My Files</h2>
-          {selectedFiles.length > 0 && (
-            <button className="delete-group-button" onClick={removeSelectedFiles}>
-              Delete Selected Files
-            </button>
-          )}
+      <h3 className="display-title">
+        {activeTab === "myFiles" ? "My Files" : "Files Shared With Me"}
+      </h3>
+      
+      {loading && (
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>Loading files...</p>
         </div>
       )}
       
-      {activeTab === "sharedFiles" && (
-        <div className="display-header">
-          <h2 className="tab-title">Files Shared With Me</h2>
+      {error && (
+        <div className="error-message">
+          {error}
+          <div className="error-details">
+            Please check console for more details.
+          </div>
         </div>
       )}
-
-      {loading ? (
-        <div className="loading-indicator">Loading files...</div>
-      ) : data.length > 0 ? (
-        <div className="image-list">
-          {data.map((item, index) => {
-            const { fileName, imageUrl, owner, fileIndex } = parseFileInfo(item);
-
-            return (
-              <div key={index} className="image-card">
-                <a href={imageUrl} target="_blank" rel="noopener noreferrer" className="image-item">
-                  <img
-                    src={imageUrl}
-                    alt={fileName}
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = "https://via.placeholder.com/250x150?text=File+Not+Found";
-                    }}
-                  />
-                </a>
-                <div className="image-info">
-                  <div className="image-title" title={fileName}>
-                    {fileName.length > 20 ? fileName.substring(0, 17) + "..." : fileName}
+      
+      {!loading && !error && data.length === 0 && (
+        <div className="no-files-message">
+          {activeTab === "myFiles" 
+            ? "You haven't uploaded any files yet."
+            : "No files have been shared with you."}
+        </div>
+      )}
+      
+      {!loading && !error && data.length > 0 && (
+        <div className="display-box">
+          {data.map((item, index) => (
+            <div className="file-card" key={index}>
+              <div className="file-preview-thumbnail" onClick={() => openPreview(item)}>
+                {item.fileType === 'image' ? (
+                  <img src={item.url} alt={item.fileName} />
+                ) : (
+                  <div className="file-icon-container">
+                    <span className="file-icon">{getFileTypeIcon(item.fileName)}</span>
                   </div>
+                )}
+              </div>
+              <div className="file-details">
+                <p className="file-name" title={item.fileName}>{item.fileName}</p>
+                <div className="file-actions">
+                  <button 
+                    className="preview-button"
+                    onClick={() => openPreview(item)}
+                  >
+                    Preview
+                  </button>
                   
-                  {owner && (
-                    <div className="file-owner">
-                      Shared by: {owner.substring(0, 6)}...{owner.substring(owner.length - 4)}
-                    </div>
-                  )}
+                  <button 
+                    className="download-button"
+                    onClick={() => downloadFile(item.url, item.fileName)}
+                  >
+                    Download
+                  </button>
                   
-                  <div className="image-actions">
-                    {activeTab === "myFiles" && (
-                      <>
-                        <button className="delete-button" onClick={() => removeFile(index)}>
-                          Delete
-                        </button>
-                        <button 
-                          className="share-file-button"
-                          onClick={() => openShareModal(index, fileName, fileIndex)}
-                        >
-                          Share
-                        </button>
-                      </>
-                    )}
-                    <button
-                      className="download-button"
-                      onClick={() => downloadFile(imageUrl, fileName)}
+                  {activeTab === "myFiles" && (
+                    <button 
+                      className="share-button"
+                      onClick={() => openShareModal(item.index, item.fileName)}
                     >
-                      Download
+                      Share
                     </button>
-                  </div>
+                  )}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="no-files">
-          <p>
-            {activeTab === "myFiles" 
-              ? "No files found. Upload new files to get started." 
-              : "No files have been shared with you yet."}
-          </p>
+            </div>
+          ))}
         </div>
       )}
-
-      {fileShareModalOpen && (
-        <FileShareModal
-          setModalOpen={setFileShareModalOpen}
-          contract={contract}
-          fileIndex={fileToShare.originalIndex !== null ? fileToShare.originalIndex : fileToShare.index}
-          fileName={fileToShare.name}
+      
+      {previewFile && (
+        <div className="file-preview-modal">
+          <div className="file-preview-content">
+            <div className="file-preview-header">
+              <h3>{previewFile.fileName}</h3>
+              <button onClick={closePreview}>×</button>
+            </div>
+            
+            <div className="file-preview-body">
+              {previewFile.fileType === 'image' && (
+                <img src={previewFile.url} alt={previewFile.fileName} />
+              )}
+              
+              {previewFile.fileType === 'video' && (
+                <video controls>
+                  <source src={previewFile.url} type={`video/${previewFile.fileName.split('.').pop()}`} />
+                  Your browser does not support video playback.
+                </video>
+              )}
+              
+              {previewFile.fileType === 'audio' && (
+                <audio controls>
+                  <source src={previewFile.url} type={`audio/${previewFile.fileName.split('.').pop()}`} />
+                  Your browser does not support audio playback.
+                </audio>
+              )}
+              
+              {previewFile.fileType === 'pdf' && (
+                <iframe src={`${previewFile.url}#toolbar=0`} title={previewFile.fileName} />
+              )}
+              
+              {previewFile.fileType === 'other' && (
+                <div className="generic-preview">
+                  <div className="file-icon-large">{getFileTypeIcon(previewFile.fileName)}</div>
+                  <p>Preview not available for this file type</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="file-preview-footer">
+              <button 
+                className="download-button-large"
+                onClick={() => downloadFile(previewFile.url, previewFile.fileName)}
+              >
+                Download File
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {shareModalOpen && (
+        <FileShareModal 
+          setModalOpen={setShareModalOpen} 
+          contract={contract} 
+          fileIndex={selectedFile?.index} 
+          fileName={selectedFile?.name}
         />
       )}
     </div>

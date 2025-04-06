@@ -28,16 +28,35 @@ function App() {
       const address = await signer.getAddress();
       setAccount(address);
       
-      // Make sure this matches the contract address used in accountsChanged event listener
-      let contractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
-      const contract = new ethers.Contract(
-        contractAddress,
-        Upload.abi,
-        signer
-      );
+      // IMPORTANT: Use a single consistent contract address across the entire application
+      let contractAddress = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
       
-      setContract(contract);
-      setProvider(provider);
+      // Debug log to make sure we're using the right contract address
+      console.log("Using contract address:", contractAddress);
+      
+      // Create contract instance with detailed error handling
+      try {
+        const contract = new ethers.Contract(
+          contractAddress,
+          Upload.abi,
+          signer
+        );
+        
+        // Test calling a method to verify contract is working
+        console.log("Testing contract connection...");
+        // Check if contract has expected methods
+        console.log("Contract has display method:", typeof contract.display === 'function');
+        console.log("Contract has getShared method:", typeof contract.getShared === 'function');
+        console.log("Contract has allow method:", typeof contract.allow === 'function');
+        console.log("Contract has disallow method:", typeof contract.disallow === 'function');
+        
+        setContract(contract);
+        setProvider(provider);
+        console.log("Contract connection successful");
+      } catch (contractError) {
+        console.error("Error creating contract instance:", contractError);
+        alert("Failed to connect to contract. Please check console for details.");
+      }
     } catch (error) {
       console.error("Error connecting wallet:", error);
     }
@@ -64,7 +83,8 @@ function App() {
           const address = await signer.getAddress();
           setAccount(address);
 
-          let contractAddress = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"; // Fixed contract address
+          // IMPORTANT: Use the SAME contract address as in connectWallet
+          let contractAddress = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
           const contract = new ethers.Contract(
             contractAddress,
             Upload.abi,

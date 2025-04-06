@@ -7,6 +7,7 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
   const [fileName, setFileName] = useState("No file selected");
   const [uploading, setUploading] = useState(false);
   const [filePreview, setFilePreview] = useState(null);
+  const [fileType, setFileType] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -111,6 +112,11 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
     const data = e.target.files[0];
     if (!data) return;
     
+    // Determine file type
+    const fileExtension = data.name.split('.').pop().toLowerCase();
+    const type = getFileTypeCategory(fileExtension, data.type);
+    setFileType(type);
+    
     // Create preview for the selected file
     if (data.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -118,8 +124,22 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
         setFilePreview(event.target.result);
       };
       reader.readAsDataURL(data);
+    } else if (data.type.startsWith('video/')) {
+      // For videos, create a video preview
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFilePreview(event.target.result);
+      };
+      reader.readAsDataURL(data);
+    } else if (data.type.startsWith('audio/')) {
+      // For audio, create an audio preview
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setFilePreview(event.target.result);
+      };
+      reader.readAsDataURL(data);
     } else {
-      // For non-image files, set a generic preview based on file type
+      // For non-media files, set a generic preview based on file type
       setFilePreview(getFileTypePreview(data.type, data.name));
     }
     
@@ -130,6 +150,21 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
     };
     setFileName(data.name);
     e.preventDefault();
+  };
+  
+  // Helper function to categorize file types
+  const getFileTypeCategory = (extension, mimeType) => {
+    if (mimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'].includes(extension)) {
+      return 'image';
+    } else if (mimeType.startsWith('video/') || ['mp4', 'webm', 'ogg', 'avi', 'mov', 'wmv'].includes(extension)) {
+      return 'video';
+    } else if (mimeType.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'flac'].includes(extension)) {
+      return 'audio';
+    } else if (extension === 'pdf' || mimeType === 'application/pdf') {
+      return 'pdf';
+    } else {
+      return 'other';
+    }
   };
   
   // Helper function to get proper preview for non-image files
@@ -168,8 +203,18 @@ const FileUpload = ({ contract, account, provider, triggerRefresh }) => {
           
           {filePreview && (
             <div className="file-preview">
-              {filePreview.startsWith('data:image') ? (
+              {fileType === 'image' ? (
                 <img src={filePreview} alt="Selected file preview" />
+              ) : fileType === 'video' ? (
+                <video controls>
+                  <source src={filePreview} type={file.type} />
+                  Your browser does not support video playback.
+                </video>
+              ) : fileType === 'audio' ? (
+                <audio controls>
+                  <source src={filePreview} type={file.type} />
+                  Your browser does not support audio playback.
+                </audio>
               ) : (
                 <div className="generic-preview">
                   <div className="file-icon">{fileName.split('.').pop().toUpperCase()}</div>

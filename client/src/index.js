@@ -3,6 +3,14 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
+import Upload from "./artifacts/contracts/Upload.sol/Upload.json";
+
+// Debug log to check contract ABI
+console.log("Contract ABI functions:", 
+  Upload.abi
+    .filter(item => item.type === "function")
+    .map(fn => fn.name)
+);
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(

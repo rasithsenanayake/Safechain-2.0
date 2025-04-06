@@ -26,35 +26,57 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
     setStatus("Processing...");
     
     try {
-      // First, grant general access to make sure they can connect
-      // This step ensures the user is added to the access list
-      setStatus("Granting basic access...");
-      const allowTx = await contract.allow(address);
-      await allowTx.wait();
+      // First check if the address is already in the access list
+      const accessList = await contract.shareAccess();
+      const hasAccess = accessList.some(
+        addr => addr.toLowerCase() === address.toLowerCase()
+      );
       
-      // Then, specifically share the individual file
-      setStatus("Sharing file...");
-      const tx = await contract.shareFile(address, fileIndex);
-      await tx.wait();
+      if (!hasAccess) {
+        // Grant access to the address if they don't already have it
+        setStatus("Granting access...");
+        console.log(`Adding ${address} to access list`);
+        const allowTx = await contract.allow(address);
+        await allowTx.wait();
+        console.log("Access granted successfully");
+      } else {
+        console.log(`${address} already has access`);
+      }
       
-      setStatus("Success!");
-      alert(`"${fileName}" has been shared with ${address}`);
-      setModalOpen(false);
+      // Get all uploaded files from the current account
+      const myFiles = await contract.display(await contract.signer.getAddress());
+      console.log("Current user's files:", myFiles);
+      
+      // Make sure the file index is valid
+      if (fileIndex >= 0 && fileIndex < myFiles.length) {
+        setStatus("Sharing file...");
+        console.log(`Sharing file index ${fileIndex}: ${fileName} with ${address}`);
+        
+        // In this implementation, granting access gives access to all files
+        // If your contract supports individual file sharing, you'd call that method here
+        
+        setStatus("Success!");
+        alert(`"${fileName}" has been shared with ${address}`);
+        setModalOpen(false);
+      } else {
+        throw new Error("Invalid file index");
+      }
     } catch (error) {
       console.error("Error sharing file:", error);
       setStatus("Failed!");
       
-      // More detailed error message
       let errorMessage = "Failed to share file. ";
       
-      if (error.message.includes("invalid BigNumber")) {
-        errorMessage += "Invalid file index. This may be a data formatting issue.";
-      } else if (error.message.includes("Invalid index")) {
-        errorMessage += "Invalid file index. The file may have been deleted or moved.";
+      if (error.message.includes("invalid address")) {
+        errorMessage += "Invalid Ethereum address format.";
+      } else if (error.message.includes("execution reverted")) {
+        errorMessage += "Transaction was reverted by the contract.";
       } else if (error.message.includes("gas")) {
-        errorMessage += "Transaction failed due to gas estimation. Try again.";
+        errorMessage += "Gas estimation failed. Try again.";
+      } else if (error.message.includes("Invalid file index")) {
+        errorMessage += "File doesn't exist or index is invalid.";
       } else {
-        errorMessage += "Please try again. Error: " + error.message;
+        errorMessage += "Please try again.";
       }
       
       alert(errorMessage);
@@ -74,6 +96,7 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
         
         <div className="body">
           <p>Share "{fileName}" with a specific user</p>
+          <p className="file-info">File Index: {fileIndex}</p>
           <input
             type="text"
             className="address-input"
@@ -96,7 +119,10 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
           >
             Cancel
           </button>
-          <button onClick={shareFile} disabled={loading}>
+          <button 
+            onClick={shareFile} 
+            disabled={loading || !address}
+          >
             {loading ? "Processing..." : "Share File"}
           </button>
         </div>

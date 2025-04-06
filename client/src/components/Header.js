@@ -1,74 +1,77 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import { ethers } from "ethers";
 import "./Header.css";
 
 const Header = ({ account, connectWallet, disconnectWallet, setModalOpen, provider }) => {
-  const [ensName, setEnsName] = useState(null);
-  const [accountName, setAccountName] = useState("My Account");
+  const [network, setNetwork] = useState("");
+  const [balance, setBalance] = useState("");
 
-  // Try to resolve ENS name when account changes
   useEffect(() => {
-    const resolveEns = async () => {
-      if (account && provider) {
+    const fetchNetworkInfo = async () => {
+      if (provider) {
         try {
-          // Try to get wallet name from MetaMask
-          if (window.ethereum && window.ethereum.request) {
-            try {
-              // First try to get ENS name
-              const name = await provider.lookupAddress(account);
-              if (name) {
-                setEnsName(name);
-                setAccountName(name);
-              } else {
-                // If no ENS name, try to get the user-defined account name from MetaMask
-                // This is a non-standard approach that might work for MetaMask
-                const accounts = await window.ethereum.request({ method: 'wallet_getPermissions' });
-                const accountLabel = accounts[0]?.name || "Account";
-                setAccountName(accountLabel);
-              }
-            } catch (err) {
-              console.error("Error getting account name:", err);
-              setAccountName("My Account");
-            }
-          }
+          const network = await provider.getNetwork();
+          setNetwork(network.name !== "unknown" ? network.name : `Chain ID: ${network.chainId}`);
         } catch (error) {
-          console.error("Error resolving account info:", error);
-          setEnsName(null);
-          setAccountName("My Account");
+          console.error("Error fetching network:", error);
+          setNetwork("Unknown");
         }
       }
     };
-    
-    resolveEns();
-  }, [account, provider]);
+
+    const fetchBalance = async () => {
+      if (provider && account) {
+        try {
+          const balance = await provider.getBalance(account);
+          const formattedBalance = parseFloat(
+            ethers.utils.formatEther(balance)
+          ).toFixed(4);
+          setBalance(formattedBalance);
+        } catch (error) {
+          console.error("Error fetching balance:", error);
+          setBalance("Error");
+        }
+      }
+    };
+
+    fetchNetworkInfo();
+    fetchBalance();
+  }, [provider, account]);
+
+  const formatAddress = (address) => {
+    if (!address) return "";
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
 
   return (
-    <header className="app-header">
-      <div className="header-container">
-        <div className="logo">
-          <h1>SAFECHAIN</h1>
-        </div>
-        <div className="header-actions">
-          {account ? (
-            <>
-              <div className="account-info">
-                <span className="account-name">{accountName}</span>
-                <span className="account-address">
-                  {account.slice(0, 6)}...{account.slice(-4)}
-                </span>
-              </div>
-              <button className="header-button share-btn" onClick={() => setModalOpen(true)}>
+    <header className="header">
+      <div className="logo">
+        <h1>SAFECHAIN</h1>
+      </div>
+      
+      <div className="header-right">
+        {account ? (
+          <>
+            <div className="wallet-info">
+              <span className="network">{network}</span>
+              {balance && <span className="balance">{balance} ETH</span>}
+              <span className="address">{formatAddress(account)}</span>
+            </div>
+            
+            <div className="action-buttons">
+              <button className="share-btn" onClick={() => setModalOpen(true)}>
                 Share Access
               </button>
-              <button className="header-button logout-btn" onClick={disconnectWallet}>
-                Logout
+              <button className="disconnect-btn" onClick={disconnectWallet}>
+                Disconnect
               </button>
-            </>
-          ) : (
-            <button className="header-button login-btn" onClick={connectWallet}>
-              Connect Wallet
-            </button>
-          )}
-        </div>
+            </div>
+          </>
+        ) : (
+          <button className="connect-btn" onClick={connectWallet}>
+            Connect Wallet
+          </button>
+        )}
       </div>
     </header>
   );

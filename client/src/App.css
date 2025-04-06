@@ -1,8 +1,10 @@
 .App {
-  text-align: center;
+  
   font-family: 'Poppins', sans-serif;
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
-  background-color: var(--background-light);
+  background-color: var(--light-bg);
 }
 
 .App-logo {
@@ -40,8 +42,10 @@ body {
 
 .app-content {
   max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2rem 1.5rem;
+  flex: 1;
 }
 
 .section-title {
@@ -51,38 +55,66 @@ body {
 }
 
 .connect-prompt {
-  background-color: white;
-  border-radius: 10px;
-  padding: 3rem;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  border-radius: 12px;
+  background-color: var(--white);
+  padding: 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
   margin: 4rem auto;
   max-width: 500px;
 }
 
 .connect-prompt p {
-  margin-bottom: 1.5rem;
-  color: var(--text-dark);
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+  color: var(--gray-700);
+  text-align: center;
 }
 
 .connect-button {
   background-color: var(--primary-blue);
   color: white;
-  border: none;
-  border-radius: 6px;
   padding: 0.8rem 2rem;
+  border: none;
+  border-radius: 8px;
   font-size: 1rem;
   font-family: 'Poppins', sans-serif;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
 
 .connect-button:hover {
-  background-color: var(--dark-blue);
+  background-color: var(--primary-hover);
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+}
+
+.connect-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
 }
 
 h1, h2, h3, p {
   font-family: 'Poppins', sans-serif;
+}
+
+@media (max-width: 768px) {
+  .app-content {
+    padding: 1.5rem 1rem;
+  }
+  
+  .connect-prompt {
+    min-height: 300px;
+    padding: 1.5rem;
+  }
+  
+  .connect-prompt p {
+    font-size: 1.1rem;
+  }
 }

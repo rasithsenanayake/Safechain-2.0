@@ -98,3 +98,155 @@
   border-color: var(--light-blue);
   color: var(--dark-blue);
 }
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 2rem;
+  background: linear-gradient(90deg, var(--primary-blue) 0%, var(--primary-light) 100%);
+  color: white;
+  height: 70px;
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.2);
+}
+
+.logo h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: white;
+  position: relative;
+}
+
+.logo h1::after {
+  content: "";
+  position: absolute;
+  height: 3px;
+  width: 40px;
+  background-color: var(--light-blue);
+  bottom: -5px;
+  left: 0;
+  border-radius: 3px;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  font-size: 0.9rem;
+}
+
+.network {
+  background-color: rgba(255, 255, 255, 0.25);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: capitalize;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.balance {
+  font-weight: 500;
+}
+
+.address {
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-family: 'Poppins', monospace;
+  font-size: 0.85rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.action-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.connect-btn, .share-btn, .disconnect-btn {
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.connect-btn {
+  background-color: white;
+  color: var(--primary-blue);
+}
+
+.connect-btn:hover {
+  background-color: var(--gray-100);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.share-btn {
+  background-color: rgba(255, 255, 255, 0.25);
+  color: white;
+  backdrop-filter: blur(5px);
+}
+
+.share-btn:hover {
+  background-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.disconnect-btn {
+  background-color: transparent;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.disconnect-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 1rem;
+  }
+  
+  .wallet-info {
+    display: none;
+  }
+  
+  .action-buttons {
+    gap: 8px;
+  }
+  
+  .connect-btn, .share-btn, .disconnect-btn {
+    padding: 8px 14px;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo h1 {
+    font-size: 1.3rem;
+  }
+  
+  .action-buttons {
+    gap: 5px;
+  }
+  
+  .connect-btn, .share-btn, .disconnect-btn {
+    padding: 4px 10px;
+    font-size: 0.8rem;
+  }
+}
