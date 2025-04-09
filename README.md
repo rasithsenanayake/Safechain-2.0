@@ -104,5 +104,4 @@ SAFECHAIN is a decentralized file storage and sharing platform built on blockcha
    - Verify you have been granted access by the file owner
    - Check if you're using the correct MetaMask account
 
-## Project Structure
 
