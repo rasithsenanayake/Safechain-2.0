@@ -1,351 +1,276 @@
-import { useEffect, useState } from "react";
-import { ethers } from "ethers";
+import { useState, useEffect } from "react";
 import "./Display.css";
 import FileShareModal from "./FileShareModal";
 
 const Display = ({ contract, account, activeTab, refreshTrigger, triggerRefresh }) => {
   const [data, setData] = useState([]);
   const [sharedData, setSharedData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [previewModalOpen, setPreviewModalOpen] = useState(false);
-  const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [shareFileIndex, setShareFileIndex] = useState(null);
-  const [shareFileName, setShareFileName] = useState("");
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [fileToDelete, setFileToDelete] = useState(null);
-  const [sharersWithMe, setSharersWithMe] = useState([]);
-
-  const fetchSharersWithMe = async () => {
-    if (!contract || !account) return [];
-    
-    try {
-      console.log("Fetching sharers with current user...");
-      
-      if (typeof contract.getSharersWithMe === 'function') {
-        const sharers = await contract.getSharersWithMe();
-        console.log("Sharers returned from contract:", sharers);
-        return sharers;
-      }
-      
-      console.log("getSharersWithMe function not available, using fallback");
-      
-      const storedAddresses = localStorage.getItem('knownAddresses');
-      let knownAddresses = storedAddresses ? JSON.parse(storedAddresses) : [];
-      
-      try {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        const network = await provider.getNetwork();
-        
-        const currentBlock = await provider.getBlockNumber();
-        const recentBlock = await provider.getBlock(currentBlock);
-        
-        if (recentBlock && recentBlock.transactions) {
-          for (let i = 0; i < Math.min(5, recentBlock.transactions.length); i++) {
-            const txHash = recentBlock.transactions[i];
-            const tx = await provider.getTransaction(txHash);
-            if (tx && tx.from && !knownAddresses.includes(tx.from)) {
-              knownAddresses.push(tx.from);
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error getting potential sharers:", error);
-      }
-      
-      const confirmedSharers = [];
-      for (const addr of knownAddresses) {
-        if (addr !== account) {
-          try {
-            const hasAccess = await contract.hasGlobalAccess(addr, account);
-            if (hasAccess) {
-              confirmedSharers.push(addr);
-            }
-          } catch (error) {
-            console.error(`Error checking if ${addr} has shared with current user:`, error);
-          }
-        }
-      }
-      
-      console.log("Confirmed sharers from fallback method:", confirmedSharers);
-      return confirmedSharers;
-    } catch (error) {
-      console.error("Error fetching sharers:", error);
-      return [];
-    }
-  };
-
-  const saveKnownAddresses = (addresses) => {
-    try {
-      const existingAddresses = localStorage.getItem('knownAddresses');
-      const parsedExisting = existingAddresses ? JSON.parse(existingAddresses) : [];
-      
-      const uniqueAddresses = [...new Set([...parsedExisting, ...addresses])];
-      localStorage.setItem('knownAddresses', JSON.stringify(uniqueAddresses));
-    } catch (error) {
-      console.error("Error saving addresses to localStorage:", error);
-    }
-  };
+  const [fileShareModalOpen, setFileShareModalOpen] = useState(false);
+  const [previewFile, setPreviewFile] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
-    const fetchFiles = async () => {
-      if (!contract || !account) {
-        setData([]);
-        setSharedData([]);
-        setLoading(false);
-        return;
-      }
+    const getMyData = async () => {
+      if (!contract || !account) return;
 
       try {
         setLoading(true);
-        setError(null);
-        
+
         if (activeTab === "myFiles") {
-          try {
-            const userFiles = await contract.display(account);
-            console.log("User files:", userFiles);
-            
-            const formattedUserData = userFiles.map((item, index) => {
-              let ipfsHash, fileName;
-              
-              if (item.includes("||")) {
-                [ipfsHash, fileName] = item.split("||");
-              } else {
-                ipfsHash = item;
-                fileName = `File ${index + 1}`;
-              }
-              
-              return {
-                url: ipfsHash,
-                fileName,
-                owner: account,
-                index
-              };
-            });
-            
-            setData(formattedUserData);
-          } catch (error) {
-            console.error("Error fetching user files:", error);
-            setError("Failed to fetch your files. Please try again.");
-          }
-        } else if (activeTab === "sharedFiles") {
-          console.log("Fetching shared files for account:", account);
-          
-          try {
-            const sharers = await fetchSharersWithMe();
-            console.log("Found potential sharers:", sharers);
-            setSharersWithMe(sharers);
-            
-            if (sharers.length > 0) {
-              saveKnownAddresses(sharers);
-            }
-            
-            let allSharedFiles = [];
-            
-            for (const sharerAddress of sharers) {
+          const userFiles = await contract.display(account);
+
+          let formattedData = await Promise.all(
+            userFiles.map(async (item, index) => {
               try {
-                console.log(`Checking files from ${sharerAddress}...`);
-                
-                const hasGlobalAccess = await contract.hasGlobalAccess(sharerAddress, account);
-                
-                if (hasGlobalAccess) {
-                  console.log(`We have global access to files from ${sharerAddress}`);
-                  const files = await contract.display(sharerAddress);
-                  console.log(`Files from ${sharerAddress}:`, files);
+                const parts = item.split("||");
+                const url = parts[0].replace("ipfs://", "https://gateway.pinata.cloud/ipfs/");
+                const fileName = parts.length > 1 ? parts[1] : `File ${index + 1}`;
+
+                let accessList = [];
+                try {
+                  const rawAccessList = await contract.shareAccess();
                   
-                  const formattedFiles = files.map((item, index) => {
-                    let ipfsHash, fileName;
+                  const processedAccessList = [];
+                  
+                  for (const access of rawAccessList) {
+                    const hasGlobalAccess = access.access;
                     
-                    if (item.includes("||")) {
-                      [ipfsHash, fileName] = item.split("||");
+                    if (hasGlobalAccess) {
+                      processedAccessList.push({
+                        address: access.user,
+                        hasGlobalAccess: true,
+                        hasFileAccess: true
+                      });
                     } else {
-                      ipfsHash = item;
-                      fileName = `File ${index + 1}`;
-                    }
-                    
-                    return {
-                      url: ipfsHash,
-                      fileName,
-                      owner: sharerAddress,
-                      index,
-                      isShared: true,
-                      accessType: "global"
-                    };
-                  });
-                  
-                  allSharedFiles = [...allSharedFiles, ...formattedFiles];
-                } else {
-                  console.log(`Checking for individually shared files from ${sharerAddress}`);
-                  
-                  const fileCount = await contract.getFileCount(sharerAddress);
-                  console.log(`User has ${fileCount} files`);
-                  
-                  for (let i = 0; i < fileCount; i++) {
-                    try {
-                      const hasFileAccess = await contract.hasFileAccess(sharerAddress, i, account);
-                      
-                      if (hasFileAccess) {
-                        console.log(`We have access to file ${i} from ${sharerAddress}`);
-                        const fileUrl = await contract.displayFile(sharerAddress, i);
+                      try {
+                        const hasFileAccess = await contract.hasFileAccess(
+                          account,
+                          index,
+                          access.user
+                        );
                         
-                        let ipfsHash, fileName;
-                        if (fileUrl.includes("||")) {
-                          [ipfsHash, fileName] = fileUrl.split("||");
-                        } else {
-                          ipfsHash = fileUrl;
-                          fileName = `File ${i + 1}`;
+                        if (hasFileAccess) {
+                          processedAccessList.push({
+                            address: access.user,
+                            hasGlobalAccess: false,
+                            hasFileAccess: true
+                          });
                         }
-                        
-                        allSharedFiles.push({
-                          url: ipfsHash,
-                          fileName,
-                          owner: sharerAddress,
-                          index: i,
-                          isShared: true,
-                          accessType: "individual"
-                        });
+                      } catch (err) {
+                        console.error(`Error checking file access for ${access.user}:`, err);
                       }
-                    } catch (error) {
-                      console.error(`Error checking access to file ${i} from ${sharerAddress}:`, error);
                     }
                   }
+                  
+                  accessList = processedAccessList;
+                } catch (err) {
+                  console.error("Error fetching access list:", err);
                 }
-              } catch (error) {
-                console.error(`Error processing files from ${sharerAddress}:`, error);
+
+                return {
+                  url,
+                  fileName,
+                  index,
+                  originalURL: item,
+                  accessList,
+                };
+              } catch (err) {
+                console.error("Error processing file:", err);
+                return {
+                  url: "",
+                  fileName: `Error: File ${index + 1}`,
+                  index,
+                  originalURL: item,
+                  accessList: [],
+                };
+              }
+            })
+          );
+
+          setData(formattedData);
+        } else if (activeTab === "sharedFiles") {
+          let sharedFiles = [];
+
+          try {
+            const accessibleAddresses = await getAddressesWhoSharedWithMe();
+
+            for (const addr of accessibleAddresses) {
+              try {
+                const userFiles = await contract.display(addr);
+
+                for (let i = 0; i < userFiles.length; i++) {
+                  try {
+                    let hasAccess = false;
+                    try {
+                      hasAccess = await contract.hasFileAccess(addr, i, account);
+                    } catch (err) {
+                      hasAccess = await contract.hasGlobalAccess(addr, account);
+                    }
+
+                    if (hasAccess) {
+                      const item = userFiles[i];
+                      const parts = item.split("||");
+                      const url = parts[0].replace("ipfs://", "https://gateway.pinata.cloud/ipfs/");
+                      const fileName = parts.length > 1 ? parts[1] : `File ${i + 1}`;
+
+                      sharedFiles.push({
+                        url,
+                        fileName,
+                        index: i,
+                        originalURL: item,
+                        owner: addr,
+                        ownerFormatted: `${addr.substring(0, 6)}...${addr.substring(
+                          addr.length - 4
+                        )}`,
+                      });
+                    }
+                  } catch (err) {
+                    console.error("Error processing shared file:", err);
+                  }
+                }
+              } catch (err) {
+                console.error(`Error fetching files from ${addr}:`, err);
               }
             }
-            
-            console.log("All shared files:", allSharedFiles);
-            setSharedData(allSharedFiles);
-          } catch (error) {
-            console.error("Error processing shared files:", error);
-            setError("Failed to fetch shared files. Please try again.");
+
+            setSharedData(sharedFiles);
+          } catch (err) {
+            console.error("Error fetching shared files:", err);
           }
         }
       } catch (error) {
-        console.error("Error in data fetching:", error);
-        setError("Failed to fetch files. Please try again.");
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchFiles();
+    getMyData();
   }, [contract, account, activeTab, refreshTrigger]);
 
-  const handlePreview = (file) => {
-    setSelectedFile(file);
-    setPreviewModalOpen(true);
-  };
-
-  const handleShare = (index, fileName) => {
-    setShareFileIndex(index);
-    setShareFileName(fileName);
-    setShareModalOpen(true);
-  };
-
-  const confirmDelete = (index) => {
-    setFileToDelete(index);
-    setDeleteConfirmOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (fileToDelete === null) return;
-    
+  const getAddressesWhoSharedWithMe = async () => {
     try {
-      setLoading(true);
-      const tx = await contract.removeFile(fileToDelete);
-      await tx.wait();
-      
-      setData(prev => prev.filter((_, i) => i !== fileToDelete));
-      
-      setDeleteConfirmOpen(false);
-      setFileToDelete(null);
-    } catch (error) {
-      console.error("Error deleting file:", error);
-      alert("Failed to delete file. Please try again.");
-    } finally {
-      setLoading(false);
+      if (contract.getSharersWithMe) {
+        return await contract.getSharersWithMe();
+      } else {
+        const allUsers = await getAllUsers();
+        const accessibleAddresses = [];
+
+        for (const addr of allUsers) {
+          if (addr !== account) {
+            try {
+              const hasAccess = await contract.hasGlobalAccess(addr, account);
+              if (hasAccess) {
+                accessibleAddresses.push(addr);
+              }
+            } catch (err) {
+              console.error(`Error checking access for ${addr}:`, err);
+            }
+          }
+        }
+
+        return accessibleAddresses;
+      }
+    } catch (err) {
+      console.error("Error getting sharers:", err);
+      return [];
     }
   };
 
-  const getFilePreview = (url, fileName) => {
-    if (url.startsWith("ipfs://")) {
-      url = `https://ipfs.io/ipfs/${url.substring(7)}`;
-    }
-    
+  const getAllUsers = async () => {
+    return [
+      "0x5B38Da6a701c568545dCfcB03FcB875f56beddC4",
+      "0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2",
+    ];
+  };
+
+  const getFileType = (url, fileName) => {
     const extension = fileName.split('.').pop().toLowerCase();
-    const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
-    const videoTypes = ['mp4', 'webm', 'ogg', 'mov'];
-    const audioTypes = ['mp3', 'wav', 'ogg', 'aac'];
-    const pdfType = 'pdf';
     
-    if (imageTypes.includes(extension)) {
-      return <img src={url} alt={fileName} />;
-    } else if (videoTypes.includes(extension)) {
-      return <div className="file-icon">VIDEO</div>;
-    } else if (audioTypes.includes(extension)) {
-      return <div className="file-icon">AUDIO</div>;
-    } else if (extension === pdfType) {
-      return <div className="file-icon">PDF</div>;
-    } else {
-      return <div className="file-icon">{extension.toUpperCase()}</div>;
-    }
-  };
-
-  const formatAddress = (address) => {
-    if (!address) return "";
-    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
-  };
-
-  const renderPreviewModal = () => {
-    if (!selectedFile) return null;
-    
-    let previewUrl = selectedFile.url;
-    if (previewUrl.startsWith("ipfs://")) {
-      previewUrl = `https://ipfs.io/ipfs/${previewUrl.substring(7)}`;
+    // Image types
+    if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(extension)) {
+      return 'image';
     }
     
-    const extension = selectedFile.fileName.split('.').pop().toLowerCase();
-    const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'];
-    const videoTypes = ['mp4', 'webm', 'ogg', 'mov'];
-    const audioTypes = ['mp3', 'wav', 'ogg', 'aac'];
-    const pdfType = 'pdf';
+    // Document types
+    if (['pdf'].includes(extension)) {
+      return 'pdf';
+    }
+    
+    if (['doc', 'docx'].includes(extension)) {
+      return 'doc';
+    }
+    
+    if (['xls', 'xlsx', 'csv'].includes(extension)) {
+      return 'xls';
+    }
+    
+    if (['ppt', 'pptx'].includes(extension)) {
+      return 'ppt';
+    }
+    
+    // Video types
+    if (['mp4', 'webm', 'mov', 'avi'].includes(extension)) {
+      return 'video';
+    }
+    
+    // Audio types
+    if (['mp3', 'wav', 'ogg', 'aac'].includes(extension)) {
+      return 'audio';
+    }
+    
+    return 'other';
+  };
+  
+  const openPreview = (file) => {
+    setPreviewFile(file);
+    setShowPreview(true);
+  };
+  
+  const closePreview = () => {
+    setShowPreview(false);
+    setPreviewFile(null);
+  };
+  
+  const renderFilePreview = () => {
+    if (!previewFile) return null;
+    
+    const fileType = getFileType(previewFile.url, previewFile.fileName);
     
     return (
-      <div className="file-preview-modal">
-        <div className="file-preview-content">
+      <div className="file-preview-modal" onClick={closePreview}>
+        <div className="file-preview-container" onClick={(e) => e.stopPropagation()}>
           <div className="file-preview-header">
-            <h3>{selectedFile.fileName}</h3>
-            <button onClick={() => setPreviewModalOpen(false)}>×</button>
+            <h3>{previewFile.fileName}</h3>
+            <button className="close-preview" onClick={closePreview}>×</button>
           </div>
-          <div className="file-preview-body">
-            {imageTypes.includes(extension) ? (
-              <img src={previewUrl} alt={selectedFile.fileName} />
-            ) : videoTypes.includes(extension) ? (
-              <video controls src={previewUrl}>
-                Your browser does not support the video tag.
+          <div className="file-preview-content">
+            {fileType === 'image' ? (
+              <img src={previewFile.url} alt={previewFile.fileName} className="preview-image" />
+            ) : fileType === 'video' ? (
+              <video controls className="preview-document">
+                <source src={previewFile.url} type={`video/${previewFile.fileName.split('.').pop()}`} />
+                Your browser does not support video playback.
               </video>
-            ) : audioTypes.includes(extension) ? (
-              <audio controls src={previewUrl}>
-                Your browser does not support the audio tag.
-              </audio>
-            ) : extension === pdfType ? (
-              <iframe src={`${previewUrl}#toolbar=0`} title={selectedFile.fileName}></iframe>
+            ) : fileType === 'pdf' ? (
+              <iframe 
+                src={`${previewFile.url}#toolbar=0`} 
+                title={previewFile.fileName} 
+                className="preview-document"
+              />
             ) : (
               <div className="generic-preview">
-                <div className="file-icon-large">{extension.toUpperCase()}</div>
-                <h4>{selectedFile.fileName}</h4>
-                <p>This file type cannot be previewed directly.</p>
-                <a 
-                  href={previewUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="download-link"
-                >
-                  Download File
-                </a>
+                <div className={`generic-file file-type-${fileType}`}>
+                  <div className="file-extension">
+                    {previewFile.fileName.split('.').pop().toUpperCase()}
+                  </div>
+                </div>
+                <p className="preview-message">Preview not available. Click the button below to open this file.</p>
+                <button onClick={() => window.open(previewFile.url)} className="open-file-btn">
+                  Open File
+                </button>
               </div>
             )}
           </div>
@@ -354,103 +279,181 @@ const Display = ({ contract, account, activeTab, refreshTrigger, triggerRefresh 
     );
   };
 
-  const renderDeleteConfirmation = () => {
-    if (!deleteConfirmOpen) return null;
-    
-    const fileToDeleteName = data[fileToDelete]?.fileName || "this file";
-    
-    return (
-      <div className="confirm-dialog">
-        <div className="confirm-dialog-content">
-          <h3>Confirm Deletion</h3>
-          <p>Are you sure you want to delete "{fileToDeleteName}"?</p>
-          <p>This action cannot be undone.</p>
-          
-          <div className="dialog-buttons">
-            <button onClick={() => setDeleteConfirmOpen(false)}>Cancel</button>
-            <button onClick={handleDelete}>Delete</button>
-          </div>
-        </div>
-      </div>
-    );
+  const removeFile = async (index) => {
+    try {
+      setLoading(true);
+      const tx = await contract.removeFile(index);
+      await tx.wait();
+      alert("File removed successfully!");
+      triggerRefresh();
+    } catch (error) {
+      console.error("Error removing file:", error);
+      alert("Failed to remove file. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const displayFiles = activeTab === "myFiles" ? data : sharedData;
+  const openFileShareModal = (fileInfo) => {
+    setSelectedFile(fileInfo);
+    setFileShareModalOpen(true);
+  };
+
+  const downloadFile = (url, fileName) => {
+    // For IPFS files, we need to fetch them first
+    fetch(url)
+      .then(response => response.blob())
+      .then(blob => {
+        // Create a blob URL for the file
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        // Create a temporary link element
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        
+        // Append to body, click, and remove
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(blobUrl);
+        }, 100);
+      })
+      .catch(error => {
+        console.error('Download failed:', error);
+        // Fallback to direct link if fetch fails
+        window.open(url, '_blank');
+      });
+  };
 
   return (
     <div className="display-container">
-      <h3 className="display-title">
-        {activeTab === "myFiles" ? "My Files" : "Shared With Me"}
-      </h3>
+      {fileShareModalOpen && selectedFile && (
+        <FileShareModal
+          setModalOpen={setFileShareModalOpen}
+          contract={contract}
+          fileIndex={selectedFile.index}
+          fileName={selectedFile.fileName}
+          triggerRefresh={triggerRefresh}
+        />
+      )}
+      
+      {showPreview && renderFilePreview()}
 
       {loading ? (
-        <div className="loading-container">
+        <div className="loading">
           <div className="loading-spinner"></div>
           <p>Loading files...</p>
         </div>
-      ) : error ? (
-        <div className="error-message">
-          <p>{error}</p>
-        </div>
-      ) : displayFiles.length === 0 ? (
-        <div className={activeTab === "sharedFiles" ? "empty-shared-files" : "no-files-message"}>
-          {activeTab === "sharedFiles" ? (
-            <>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-              </svg>
-              <h4>No shared files yet</h4>
-              <p>No one has shared any files with you. When someone shares files, they'll appear here.</p>
-            </>
+      ) : activeTab === "myFiles" ? (
+        <div className="files-grid">
+          {data.length === 0 ? (
+            <div className="no-files">
+              <p>You haven't uploaded any files yet.</p>
+            </div>
           ) : (
-            <p>You haven't uploaded any files yet.</p>
+            data.map((item, index) => {
+              const fileType = getFileType(item.url, item.fileName);
+              return (
+                <div className="file-card" key={`${index}-${refreshTrigger}`}>
+                  <div 
+                    className={`file-thumbnail file-type-${fileType}`}
+                    onClick={() => openPreview(item)}
+                  >
+                    {fileType === 'image' ? (
+                      <img src={item.url} alt={item.fileName} />
+                    ) : (
+                      <div className={`generic-file file-type-${fileType}`}>
+                        <div className="file-extension">
+                          {item.fileName.split(".").length > 1
+                            ? item.fileName.split(".").pop().toUpperCase()
+                            : "FILE"}
+                        </div>
+                      </div>
+                    )}
+                    <div className="preview-overlay">
+                      <div className="preview-icon">👁️</div>
+                    </div>
+                  </div>
+
+                  <div className="file-info">
+                    <h3 title={item.fileName}>{item.fileName}</h3>
+
+                    <div className="access-indicator">
+                      {item.accessList && item.accessList.length > 0 ? (
+                        <span title="Shared with users">
+                          Shared with {item.accessList.length} user(s)
+                        </span>
+                      ) : (
+                        <span>Not shared</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="file-actions">
+                    <button onClick={() => downloadFile(item.url, item.fileName)}>Download</button>
+                    <button onClick={() => openFileShareModal(item)}>Share</button>
+                    <button
+                      className="remove-btn"
+                      onClick={() => removeFile(item.index)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       ) : (
         <div className="files-grid">
-          {displayFiles.map((item, index) => (
-            <div className="file-card" key={`${item.owner}-${item.index}-${index}`}>
-              <div 
-                className="file-preview-thumbnail"
-                onClick={() => handlePreview(item)}
-              >
-                {getFilePreview(item.url, item.fileName)}
-                {item.isShared && <div className="shared-indicator">S</div>}
-              </div>
-              <div className="file-details">
-                <div className="file-name">{item.fileName}</div>
-                {item.isShared && (
-                  <div className="file-owner">
-                    From: {formatAddress(item.owner)}
-                  </div>
-                )}
-                <div className="file-actions">
-                  <button onClick={() => handlePreview(item)}>View</button>
-                  {activeTab === "myFiles" && (
-                    <>
-                      <button onClick={() => handleShare(item.index, item.fileName)}>Share</button>
-                      <button onClick={() => confirmDelete(item.index)}>Delete</button>
-                    </>
-                  )}
-                </div>
-              </div>
+          {sharedData.length === 0 ? (
+            <div className="no-files">
+              <p>No one has shared files with you yet.</p>
             </div>
-          ))}
-        </div>
-      )}
+          ) : (
+            sharedData.map((item, index) => {
+              const fileType = getFileType(item.url, item.fileName);
+              return (
+                <div className="file-card shared" key={`shared-${index}-${refreshTrigger}`}>
+                  <div 
+                    className={`file-thumbnail file-type-${fileType}`}
+                    onClick={() => openPreview(item)}
+                  >
+                    {fileType === 'image' ? (
+                      <img src={item.url} alt={item.fileName} />
+                    ) : (
+                      <div className={`generic-file file-type-${fileType}`}>
+                        <div className="file-extension">
+                          {item.fileName.split(".").length > 1
+                            ? item.fileName.split(".").pop().toUpperCase()
+                            : "FILE"}
+                        </div>
+                      </div>
+                    )}
+                    <div className="preview-overlay">
+                      <div className="preview-icon">👁️</div>
+                    </div>
+                  </div>
 
-      {previewModalOpen && selectedFile && renderPreviewModal()}
-      {deleteConfirmOpen && renderDeleteConfirmation()}
-      
-      {shareModalOpen && (
-        <FileShareModal
-          setModalOpen={setShareModalOpen}
-          contract={contract}
-          fileIndex={shareFileIndex}
-          fileName={shareFileName}
-          account={account}
-          triggerRefresh={triggerRefresh}
-        />
+                  <div className="file-info">
+                    <h3 title={item.fileName}>{item.fileName}</h3>
+                    <div className="owner-info">
+                      Shared by: <span title={item.owner}>{item.ownerFormatted}</span>
+                    </div>
+                  </div>
+
+                  <div className="file-actions">
+                    <button onClick={() => downloadFile(item.url, item.fileName)}>Download</button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       )}
     </div>
   );

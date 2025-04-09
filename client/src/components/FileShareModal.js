@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import "./FileShareModal.css";
 
-const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
+const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName, triggerRefresh }) => {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
@@ -23,15 +23,39 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       const accessList = await contract.shareAccess();
       console.log("Access list for sharing:", accessList);
       
-      // Filter addresses that have access
-      const addresses = accessList
-        .filter(item => item.access)
-        .map(item => ({
-          address: item.user,
-          displayAddress: `${item.user.slice(0, 8)}...${item.user.slice(-6)}`,
-          hasAccess: item.access
-        }));
+      // Get the current user's address
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const currentUserAddress = await signer.getAddress();
       
+      // Filter addresses and check which ones have access to this specific file
+      const addresses = [];
+      
+      // Process each item in the access list
+      for (const item of accessList) {
+        try {
+          // Check if the user has access to this specific file
+          const hasFileAccess = await contract.hasFileAccess(
+            currentUserAddress, 
+            fileIndex, 
+            item.user
+          );
+          
+          // Only include users who have access to this specific file
+          if (hasFileAccess) {
+            addresses.push({
+              address: item.user,
+              displayAddress: `${item.user.slice(0, 8)}...${item.user.slice(-6)}`,
+              hasGlobalAccess: item.access,
+              hasFileAccess: hasFileAccess
+            });
+          }
+        } catch (err) {
+          console.error(`Error checking file access for ${item.user}:`, err);
+        }
+      }
+      
+      console.log(`Found ${addresses.length} users with access to file ${fileIndex}:`, addresses);
       setSharedAddresses(addresses);
     } catch (error) {
       console.error("Error fetching shared addresses:", error);
@@ -72,15 +96,16 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       
       console.log(`Sharing file ${fileName} (index: ${fileIndex}) with ${address}`);
       
-      // Check if the contract has the shareFile method for individual file sharing
-      if (typeof contract.shareFile === 'function') {
+      // Use the shareFile method for individual file sharing
+      try {
         console.log(`Using shareFile method for file index ${fileIndex}`);
         const shareTx = await contract.shareFile(address, fileIndex);
         await shareTx.wait();
         console.log("File shared successfully");
-      } else {
-        // Fall back to global access if file-specific sharing is not available
-        console.log("shareFile method not available, falling back to allow method");
+      } catch (shareError) {
+        console.error("Error with shareFile method:", shareError);
+        // If specific file sharing failed, try global access as fallback
+        console.log("Fallback to global access sharing");
         const tx = await contract.allow(address);
         await tx.wait();
       }
@@ -94,6 +119,9 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       
       // Switch to manage tab
       setActiveTab("manage");
+      
+      // Refresh the parent display
+      if (triggerRefresh) triggerRefresh();
     } catch (error) {
       console.error("Error sharing file:", error);
       setStatus("Failed!");
@@ -126,31 +154,11 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
     setStatus("Revoking access...");
     
     try {
-      // Check if contract has disallow method
-      if (typeof contract.disallow !== 'function') {
-        throw new Error("Contract doesn't have disallow method");
-      }
-      
-      // Try specific file revocation first if the method exists
-      if (typeof contract.revokeFileAccess === 'function') {
-        try {
-          console.log(`Revoking specific file access for file ${fileIndex} from ${addressToRevoke}`);
-          const tx = await contract.revokeFileAccess(addressToRevoke, fileIndex);
-          await tx.wait();
-          console.log("File-specific revocation successful");
-        } catch (error) {
-          console.error("Error with file-specific revocation:", error);
-          // If file-specific revocation fails, try global access revocation
-          console.log("Falling back to global access revocation");
-          const tx = await contract.disallow(addressToRevoke);
-          await tx.wait();
-        }
-      } else {
-        // Fall back to global access revocation if file-specific isn't available
-        console.log(`Revoking global access from ${addressToRevoke}`);
-        const tx = await contract.disallow(addressToRevoke);
-        await tx.wait();
-      }
+      // Use the specific file revocation method
+      console.log(`Revoking specific file access for file ${fileIndex} from ${addressToRevoke}`);
+      const tx = await contract.revokeFileAccess(addressToRevoke, fileIndex);
+      await tx.wait();
+      console.log("File-specific revocation successful");
       
       // Refresh the list of shared addresses
       setTimeout(() => {
@@ -159,6 +167,9 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       
       setStatus("Access revoked!");
       alert(`Access for ${addressToRevoke} has been revoked`);
+      
+      // Refresh the parent display
+      if (triggerRefresh) triggerRefresh();
     } catch (error) {
       console.error("Error revoking access:", error);
       setStatus("Failed to revoke access!");
@@ -254,6 +265,9 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
                   <div key={idx} className="shared-address-item">
                     <span className="shared-address" title={item.address}>
                       {item.displayAddress}
+                    </span>
+                    <span className="access-type" title="Access type">
+                      {item.hasGlobalAccess ? "(Global access)" : "(File-specific)"}
                     </span>
                     <button 
                       className="revoke-btn"
