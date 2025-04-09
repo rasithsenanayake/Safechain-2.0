@@ -8,7 +8,6 @@ const Modal = ({ setModalOpen, contract }) => {
   const [loading, setLoading] = useState(false);
   const [accessList, setAccessList] = useState([]);
   const [selectedAddress, setSelectedAddress] = useState("");
-  const [fileSharing, setFileSharing] = useState([]);
   
   useEffect(() => {
     const fetchAccessData = async () => {
@@ -16,26 +15,43 @@ const Modal = ({ setModalOpen, contract }) => {
       
       try {
         setLoading(true);
+        console.log("Fetching access list from contract");
+        
+        // Check if the contract has the shareAccess method
+        if (typeof contract.shareAccess !== 'function') {
+          console.error("Contract does not have shareAccess method");
+          setStatus("Contract does not support access lists");
+          setLoading(false);
+          return;
+        }
         
         // Fetch general access list
         const rawList = await contract.shareAccess();
-        const formattedList = rawList.map(item => ({
-          address: item.user,
-          hasAccess: item.access,
-          displayAddress: `${item.user.substring(0, 6)}...${item.user.substring(item.user.length - 4)}`,
-        }));
-        setAccessList(formattedList);
+        console.log("Raw access list:", rawList);
         
-        // Fetch file sharing information
-        // This will need to be implemented in the smart contract
-        try {
-          const fileSharingData = await contract.getFileSharingData();
-          setFileSharing(fileSharingData);
-        } catch (error) {
-          console.error("Error fetching file sharing data (may not be implemented yet):", error);
+        // Format the list based on the actual structure returned by the contract
+        let formattedList = [];
+        
+        if (Array.isArray(rawList)) {
+          // If it's a simple array of addresses
+          formattedList = rawList.map(item => {
+            // Handle different return formats
+            const address = typeof item === 'object' && item.user ? item.user : item;
+            const hasAccess = typeof item === 'object' ? item.access : true;
+            
+            return {
+              address,
+              hasAccess,
+              displayAddress: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
+            };
+          });
         }
+        
+        console.log("Formatted access list:", formattedList);
+        setAccessList(formattedList);
       } catch (error) {
         console.error("Error loading access data:", error);
+        setStatus("Failed to load access list");
       } finally {
         setLoading(false);
       }
@@ -62,20 +78,38 @@ const Modal = ({ setModalOpen, contract }) => {
     setStatus("Processing...");
     
     try {
+      console.log("Granting access to:", address);
+      
+      // Verify if the contract has the allow method
+      if (typeof contract.allow !== 'function') {
+        throw new Error("Contract doesn't have allow method");
+      }
+      
       const tx = await contract.allow(address);
       await tx.wait();
+      console.log("Access grant transaction completed");
       
       setStatus("Success!");
       alert("Access granted successfully!");
       
       // Refresh the access list
-      const rawList = await contract.shareAccess();
-      const formattedList = rawList.map(item => ({
-        address: item.user,
-        hasAccess: item.access,
-        displayAddress: `${item.user.substring(0, 6)}...${item.user.substring(item.user.length - 4)}`,
-      }));
-      setAccessList(formattedList);
+      if (typeof contract.shareAccess === 'function') {
+        const rawList = await contract.shareAccess();
+        console.log("Updated access list:", rawList);
+        
+        const formattedList = rawList.map(item => {
+          const address = typeof item === 'object' && item.user ? item.user : item;
+          const hasAccess = typeof item === 'object' ? item.access : true;
+          
+          return {
+            address,
+            hasAccess,
+            displayAddress: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
+          };
+        });
+        
+        setAccessList(formattedList);
+      }
       
       setAddress("");
     } catch (error) {
@@ -97,20 +131,37 @@ const Modal = ({ setModalOpen, contract }) => {
     setStatus("Revoking access...");
     
     try {
+      console.log("Revoking access from:", selectedAddress);
+      
+      // Verify if the contract has the disallow method
+      if (typeof contract.disallow !== 'function') {
+        throw new Error("Contract doesn't have disallow method");
+      }
+      
       const tx = await contract.disallow(selectedAddress);
       await tx.wait();
+      console.log("Access revoke transaction completed");
       
       setStatus("Access revoked!");
       alert("Access revoked successfully!");
       
       // Refresh the access list
-      const rawList = await contract.shareAccess();
-      const formattedList = rawList.map(item => ({
-        address: item.user,
-        hasAccess: item.access,
-        displayAddress: `${item.user.substring(0, 6)}...${item.user.substring(item.user.length - 4)}`,
-      }));
-      setAccessList(formattedList);
+      if (typeof contract.shareAccess === 'function') {
+        const rawList = await contract.shareAccess();
+        
+        const formattedList = rawList.map(item => {
+          const address = typeof item === 'object' && item.user ? item.user : item;
+          const hasAccess = typeof item === 'object' ? item.access : true;
+          
+          return {
+            address,
+            hasAccess,
+            displayAddress: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
+          };
+        });
+        
+        setAccessList(formattedList);
+      }
       
       setSelectedAddress("");
     } catch (error) {
@@ -134,19 +185,13 @@ const Modal = ({ setModalOpen, contract }) => {
         <div className="body">
           <div className="info-section">
             <p className="access-info">
-              <strong>Important:</strong>
-              <br />
-              <strong>General Access</strong> only allows users to connect to your account.
-              <br />
-              <strong>It does NOT automatically share any files.</strong>
-              <br />
-              To share specific files, use the "Share" option on each individual file.
+              <strong>Important:</strong> Sharing access will allow the user to view your files.
             </p>
           </div>
           
           <div className="share-section">
-            <h3>Grant General Access</h3>
-            <p>Enter the wallet address to grant connection access to your account</p>
+            <h3>Grant File Access</h3>
+            <p>Enter the wallet address to grant access to your files</p>
             <input
               type="text"
               className="address-input"
@@ -159,12 +204,12 @@ const Modal = ({ setModalOpen, contract }) => {
               onClick={sharing} 
               disabled={loading}
             >
-              {loading ? "Processing..." : "Grant General Access"}
+              {loading ? "Processing..." : "Grant Access"}
             </button>
           </div>
           
           <div className="revoke-section">
-            <h3>Manage General Access</h3>
+            <h3>Manage Access</h3>
             {accessList.length > 0 ? (
               <>
                 <p>Select an address to manage access:</p>
@@ -192,7 +237,7 @@ const Modal = ({ setModalOpen, contract }) => {
                       onClick={revokeAccess}
                       disabled={loading}
                     >
-                      {loading ? "Processing..." : "Revoke General Access"}
+                      {loading ? "Processing..." : "Revoke Access"}
                     </button>
                   )}
                 </div>

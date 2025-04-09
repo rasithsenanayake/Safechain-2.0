@@ -9,7 +9,7 @@ import TabSelector from "./components/TabSelector";
 import "./App.css";
 
 // Standardize contract address across the application
-const CONTRACT_ADDRESS = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9";
+const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
 
 function App() {
   const [account, setAccount] = useState("");
@@ -98,29 +98,29 @@ function App() {
         window.location.reload();
       });
 
-      // Only listen to account changes if enabled
-      if (accountChangeEnabled) {
-        window.ethereum.on("accountsChanged", async (accounts) => {
-          if (accounts.length > 0) {
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            const signer = provider.getSigner();
-            const address = await signer.getAddress();
-            setAccount(address);
+      // Listen for account changes regardless of accountChangeEnabled flag
+      window.ethereum.on("accountsChanged", async (accounts) => {
+        if (accounts.length > 0) {
+          const provider = new ethers.providers.Web3Provider(window.ethereum);
+          const signer = provider.getSigner();
+          const address = await signer.getAddress();
+          setAccount(address);
 
-            const contract = new ethers.Contract(
-              CONTRACT_ADDRESS,
-              Upload.abi,
-              signer
-            );
+          // Use the consistent contract address
+          const contract = new ethers.Contract(
+            CONTRACT_ADDRESS,
+            Upload.abi,
+            signer
+          );
 
-            setContract(contract);
-            setProvider(provider);
-            triggerRefresh();
-          } else {
-            disconnectWallet();
-          }
-        });
-      }
+          setContract(contract);
+          setProvider(provider);
+          triggerRefresh();
+          console.log("Account changed to:", address);
+        } else {
+          disconnectWallet();
+        }
+      });
       
       // Return cleanup function to remove event listeners
       return () => {
@@ -128,7 +128,7 @@ function App() {
         window.ethereum.removeListener("accountsChanged", () => {});
       };
     }
-  }, [accountChangeEnabled]); // Only re-run if accountChangeEnabled changes
+  }, []); // Remove dependency on accountChangeEnabled
 
   useEffect(() => {
     // Auto connect if previously connected

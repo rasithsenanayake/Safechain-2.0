@@ -6,41 +6,32 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
-  const [sharedWith, setSharedWith] = useState([]);
-  const [selectedAddress, setSelectedAddress] = useState("");
+  const [sharedAddresses, setSharedAddresses] = useState([]);
+  const [activeTab, setActiveTab] = useState("share"); // "share" or "manage"
 
   useEffect(() => {
-    // Fetch users who have access to this specific file
-    const fetchFileSharedUsers = async () => {
-      if (!contract || fileIndex === null || fileIndex === undefined) return;
-      
-      try {
-        setLoading(true);
-        const users = await contract.getFileSharedUsers(fileIndex);
-        
-        // Format addresses for display
-        const formattedUsers = users.map(user => ({
-          address: user,
-          displayAddress: `${user.substring(0, 6)}...${user.substring(user.length - 4)}`
-        }));
-        
-        setSharedWith(formattedUsers);
-      } catch (error) {
-        console.error("Error fetching shared users for file:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Fetch shared addresses when component mounts
+    fetchSharedAddresses();
+  }, []);
+
+  const fetchSharedAddresses = async () => {
+    if (!contract) return;
     
-    fetchFileSharedUsers();
-  }, [contract, fileIndex]);
+    try {
+      // This is just a placeholder. Your contract may have a different method to get shared addresses
+      if (typeof contract.getSharedAddresses === 'function') {
+        const addresses = await contract.getSharedAddresses(fileIndex);
+        setSharedAddresses(addresses);
+      } else {
+        console.log("Contract doesn't have getSharedAddresses method");
+      }
+    } catch (error) {
+      console.error("Error fetching shared addresses:", error);
+    }
+  };
 
   const handleAddressChange = (e) => {
     setAddress(e.target.value);
-  };
-
-  const handleSelectChange = (e) => {
-    setSelectedAddress(e.target.value);
   };
 
   const shareFile = async () => {
@@ -54,54 +45,57 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       return;
     }
     
-    // Check if the user already has access to this file
-    const currentSharedUsers = sharedWith.map(user => user.address);
-    if (currentSharedUsers.includes(address)) {
-      alert(`${address} already has access to this file.`);
-      return;
-    }
-    
     setLoading(true);
     setStatus("Processing...");
     
     try {
-      // First, grant general access to make sure they can connect
-      // This step ensures the user is added to the access list
-      setStatus("Granting basic access...");
+      console.log(`Sharing file ${fileName} (index: ${fileIndex}) with ${address}`);
+      
+      // First, verify if contract has allow method
+      if (typeof contract.allow !== 'function') {
+        throw new Error("Contract doesn't have allow method");
+      }
+      
+      // Grant general access to the address
+      setStatus("Granting access...");
+      console.log("Calling allow method with address:", address);
       const allowTx = await contract.allow(address);
       await allowTx.wait();
+      console.log("Access granted successfully");
       
-      // Then, specifically share the individual file
+      // The allow method will usually share all files in the basic implementation
+      // If a shareFile method exists, call it for the specific file
       setStatus("Sharing file...");
-      const tx = await contract.shareFile(address, fileIndex);
-      await tx.wait();
+      if (typeof contract.shareFile === 'function') {
+        const shareTx = await contract.shareFile(address, fileIndex);
+        await shareTx.wait();
+        console.log("File shared using shareFile method");
+      } else {
+        console.log("No specific shareFile method, relying on allow method");
+      }
       
-      // Update the shared users list
-      const users = await contract.getFileSharedUsers(fileIndex);
-      const formattedUsers = users.map(user => ({
-        address: user,
-        displayAddress: `${user.substring(0, 6)}...${user.substring(user.length - 4)}`
-      }));
+      // Refresh the list of shared addresses
+      fetchSharedAddresses();
       
-      setSharedWith(formattedUsers);
       setStatus("Success!");
       alert(`"${fileName}" has been shared with ${address}`);
-      setAddress(""); // Clear the input field
+      setAddress("");
     } catch (error) {
       console.error("Error sharing file:", error);
       setStatus("Failed!");
       
-      // More detailed error message
       let errorMessage = "Failed to share file. ";
       
-      if (error.message.includes("invalid BigNumber")) {
-        errorMessage += "Invalid file index. This may be a data formatting issue.";
-      } else if (error.message.includes("Invalid index")) {
-        errorMessage += "Invalid file index. The file may have been deleted or moved.";
+      if (error.message.includes("invalid address")) {
+        errorMessage += "Invalid Ethereum address format.";
+      } else if (error.message.includes("execution reverted")) {
+        errorMessage += "Transaction was reverted by the contract.";
       } else if (error.message.includes("gas")) {
         errorMessage += "Transaction failed due to gas estimation. Try again.";
+      } else if (error.message.includes("method")) {
+        errorMessage += "Contract doesn't support this operation.";
       } else {
-        errorMessage += "Please try again. Error: " + error.message;
+        errorMessage += "Please try again.";
       }
       
       alert(errorMessage);
@@ -110,41 +104,33 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
     }
   };
   
-  const revokeFileAccess = async () => {
-    if (!selectedAddress || !ethers.utils.isAddress(selectedAddress)) {
-      alert("Please select a valid address");
-      return;
-    }
-    
-    if (fileIndex === null || fileIndex === undefined) {
-      alert("File index is not valid. Please try again.");
+  const revokeAccess = async (addressToRevoke) => {
+    if (!addressToRevoke || !ethers.utils.isAddress(addressToRevoke)) {
+      alert("Invalid Ethereum address");
       return;
     }
     
     setLoading(true);
-    setStatus("Revoking file access...");
+    setStatus("Revoking access...");
     
     try {
-      const tx = await contract.revokeFileAccess(selectedAddress, fileIndex);
+      // Check if contract has disallow method
+      if (typeof contract.disallow !== 'function') {
+        throw new Error("Contract doesn't have disallow method");
+      }
+      
+      const tx = await contract.disallow(addressToRevoke);
       await tx.wait();
       
+      // Refresh the list of shared addresses
+      fetchSharedAddresses();
+      
       setStatus("Access revoked!");
-      
-      // Refresh the shared users list
-      const users = await contract.getFileSharedUsers(fileIndex);
-      const formattedUsers = users.map(user => ({
-        address: user,
-        displayAddress: `${user.substring(0, 6)}...${user.substring(user.length - 4)}`
-      }));
-      
-      setSharedWith(formattedUsers);
-      setSelectedAddress("");
-      
-      alert(`File access for "${fileName}" has been revoked from ${selectedAddress}`);
+      alert(`Access for ${addressToRevoke} has been revoked`);
     } catch (error) {
-      console.error("Error revoking file access:", error);
-      setStatus("Failed!");
-      alert("Failed to revoke file access. Please try again.");
+      console.error("Error revoking access:", error);
+      setStatus("Failed to revoke access!");
+      alert(`Failed to revoke access: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -157,80 +143,103 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
           <button onClick={() => setModalOpen(false)}>×</button>
         </div>
         
-        <div className="title">Share File</div>
+        <div className="title">Manage File Sharing</div>
         
-        <div className="body">
-          <h3>Share "{fileName}" with a user</h3>
-          <input
-            type="text"
-            className="address-input"
-            placeholder="Enter Ethereum Address (0x...)"
-            value={address}
-            onChange={handleAddressChange}
-          />
-          <button 
-            className="action-button"
-            onClick={shareFile} 
-            disabled={loading}
-          >
-            {loading ? "Processing..." : "Share File"}
-          </button>
-          
-          <div className="manage-sharing-section">
-            <h3>Manage File Sharing</h3>
-            {sharedWith.length > 0 ? (
-              <>
-                <p>Revoke access to this file:</p>
-                <div className="shared-users-list">
-                  <select 
-                    value={selectedAddress} 
-                    onChange={handleSelectChange}
-                    className="address-select"
-                  >
-                    <option value="">Select an address</option>
-                    {sharedWith.map((user, index) => (
-                      <option 
-                        key={index} 
-                        value={user.address}
-                      >
-                        {user.displayAddress}
-                      </option>
-                    ))}
-                  </select>
-                  
-                  {selectedAddress && (
-                    <button 
-                      className="action-button revoke-button"
-                      onClick={revokeFileAccess}
-                      disabled={loading}
-                    >
-                      {loading ? "Processing..." : "Revoke File Access"}
-                    </button>
-                  )}
-                </div>
-              </>
-            ) : (
-              <p className="no-sharing-message">
-                {loading ? "Loading..." : "This file hasn't been shared with anyone yet"}
-              </p>
-            )}
+        <div className="tab-container">
+          <div className="tabs">
+            <button 
+              className={`tab-btn ${activeTab === 'share' ? 'active' : ''}`}
+              onClick={() => setActiveTab('share')}
+            >
+              Share File
+            </button>
+            <button 
+              className={`tab-btn ${activeTab === 'manage' ? 'active' : ''}`}
+              onClick={() => setActiveTab('manage')}
+            >
+              Manage Access
+            </button>
           </div>
         </div>
         
-        {status && (
-          <div className={`status-message ${status === "Failed!" ? "error" : ""}`}>
-            {status}
+        {activeTab === 'share' && (
+          <div className="body">
+            <p>Share "{fileName}" with a specific user</p>
+            <p className="file-info">File Index: {fileIndex}</p>
+            <input
+              type="text"
+              className="address-input"
+              placeholder="Enter Ethereum Address (0x...)"
+              value={address}
+              onChange={handleAddressChange}
+            />
+            
+            {status && (
+              <div className={`status-message ${status === "Failed!" ? "error" : ""}`}>
+                {status}
+              </div>
+            )}
+            
+            <div className="footer">
+              <button
+                onClick={() => setModalOpen(false)}
+                id="cancelBtn"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={shareFile} 
+                disabled={loading || !address}
+              >
+                {loading ? "Processing..." : "Share File"}
+              </button>
+            </div>
           </div>
         )}
         
-        <div className="footer">
-          <button
-            onClick={() => setModalOpen(false)}
-            id="cancelBtn"
-          >
-            Close
-          </button>
-        </div>
+        {activeTab === 'manage' && (
+          <div className="body">
+            <p>Manage access for "{fileName}"</p>
+            
+            {sharedAddresses.length > 0 ? (
+              <div className="shared-addresses-list">
+                {sharedAddresses.map((addr, idx) => (
+                  <div key={idx} className="shared-address-item">
+                    <span className="shared-address" title={addr}>
+                      {addr.slice(0, 8)}...{addr.slice(-6)}
+                    </span>
+                    <button 
+                      className="revoke-btn"
+                      onClick={() => revokeAccess(addr)}
+                      disabled={loading}
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="no-shared-addresses">
+                <p>This file has not been shared with anyone yet.</p>
+              </div>
+            )}
+            
+            {status && (
+              <div className={`status-message ${status.includes("Failed") ? "error" : ""}`}>
+                {status}
+              </div>
+            )}
+            
+            <div className="footer">
+              <button
+                onClick={() => setModalOpen(false)}
+                id="doneBtn"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

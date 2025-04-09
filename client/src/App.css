@@ -1,8 +1,21 @@
+:root {
+  --primary-blue: #0078ff;
+  --secondary-blue: #00a1ff;
+  --dark-blue: #0061cf;
+  --light-blue: #e6f3ff;
+  --accent-blue: #00c2ff;
+  --background-light: #f5f9ff;
+  --text-dark: #333;
+  --text-light: #fff;
+}
+
 .App {
   text-align: center;
   font-family: 'Poppins', sans-serif;
   min-height: 100vh;
   background-color: var(--background-light);
+  display: flex;
+  flex-direction: column;
 }
 
 .App-logo {
@@ -42,6 +55,8 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
+  flex: 1;
+  width: 100%;
 }
 
 .section-title {
@@ -80,7 +95,7 @@ body {
 .connect-button:hover {
   background-color: var(--dark-blue);
   transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 15px rgba(0, 120, 255, 0.3);
 }
 
 h1, h2, h3, p {
