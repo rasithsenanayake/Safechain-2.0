@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import "./Modal.css";
 
-const Modal = ({ setModalOpen, contract }) => {
+const Modal = ({ setModalOpen, contract, triggerRefresh, account }) => {
   const [address, setAddress] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,6 +74,12 @@ const Modal = ({ setModalOpen, contract }) => {
       return;
     }
     
+    // Add validation to prevent self-sharing
+    if (address.toLowerCase() === account?.toLowerCase()) {
+      alert("You cannot share access with yourself");
+      return;
+    }
+    
     setLoading(true);
     setStatus("Processing...");
     
@@ -112,6 +118,9 @@ const Modal = ({ setModalOpen, contract }) => {
       }
       
       setAddress("");
+      
+      // Trigger refresh in parent component
+      if (triggerRefresh) triggerRefresh();
     } catch (error) {
       console.error("Error sharing access:", error);
       setStatus("Failed!");
@@ -138,36 +147,49 @@ const Modal = ({ setModalOpen, contract }) => {
         throw new Error("Contract doesn't have disallow method");
       }
       
+      // Call the disallow function with proper error handling
       const tx = await contract.disallow(selectedAddress);
-      await tx.wait();
-      console.log("Access revoke transaction completed");
+      console.log("Transaction sent:", tx.hash);
+      
+      // Wait for the transaction to be confirmed
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed:", receipt);
+      
+      if (receipt.status !== 1) {
+        throw new Error("Transaction failed");
+      }
       
       setStatus("Access revoked!");
       alert("Access revoked successfully!");
       
-      // Refresh the access list
-      if (typeof contract.shareAccess === 'function') {
-        const rawList = await contract.shareAccess();
-        
-        const formattedList = rawList.map(item => {
-          const address = typeof item === 'object' && item.user ? item.user : item;
-          const hasAccess = typeof item === 'object' ? item.access : true;
+      // Refresh the access list with a delay to allow blockchain to update
+      setTimeout(async () => {
+        if (typeof contract.shareAccess === 'function') {
+          const rawList = await contract.shareAccess();
           
-          return {
-            address,
-            hasAccess,
-            displayAddress: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
-          };
-        });
+          const formattedList = rawList.map(item => {
+            const address = typeof item === 'object' && item.user ? item.user : item;
+            const hasAccess = typeof item === 'object' ? item.access : true;
+            
+            return {
+              address,
+              hasAccess,
+              displayAddress: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
+            };
+          });
+          
+          setAccessList(formattedList);
+        }
         
-        setAccessList(formattedList);
-      }
-      
-      setSelectedAddress("");
+        setSelectedAddress("");
+        
+        // Trigger refresh in parent component
+        if (triggerRefresh) triggerRefresh();
+      }, 1000);
     } catch (error) {
       console.error("Error revoking access:", error);
       setStatus("Failed to revoke access!");
-      alert("Failed to revoke access. Please try again.");
+      alert(`Failed to revoke access: ${error.message || "Unknown error"}`);
     } finally {
       setLoading(false);
     }

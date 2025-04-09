@@ -18,15 +18,25 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
     if (!contract) return;
     
     try {
-      // This is just a placeholder. Your contract may have a different method to get shared addresses
-      if (typeof contract.getSharedAddresses === 'function') {
-        const addresses = await contract.getSharedAddresses(fileIndex);
-        setSharedAddresses(addresses);
-      } else {
-        console.log("Contract doesn't have getSharedAddresses method");
-      }
+      setLoading(true);
+      // First get the access list from the contract
+      const accessList = await contract.shareAccess();
+      console.log("Access list for sharing:", accessList);
+      
+      // Filter addresses that have access
+      const addresses = accessList
+        .filter(item => item.access)
+        .map(item => ({
+          address: item.user,
+          displayAddress: `${item.user.slice(0, 8)}...${item.user.slice(-6)}`,
+          hasAccess: item.access
+        }));
+      
+      setSharedAddresses(addresses);
     } catch (error) {
       console.error("Error fetching shared addresses:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,57 +55,59 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
       return;
     }
     
-    setLoading(true);
-    setStatus("Processing...");
-    
+    // Get current user's address from the signer
     try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const currentUserAddress = await signer.getAddress();
+      
+      // Check if trying to share with own address
+      if (address.toLowerCase() === currentUserAddress.toLowerCase()) {
+        alert("You cannot share files with yourself");
+        return;
+      }
+      
+      setLoading(true);
+      setStatus("Processing...");
+      
       console.log(`Sharing file ${fileName} (index: ${fileIndex}) with ${address}`);
       
-      // First, verify if contract has allow method
-      if (typeof contract.allow !== 'function') {
-        throw new Error("Contract doesn't have allow method");
-      }
-      
-      // Grant general access to the address
-      setStatus("Granting access...");
-      console.log("Calling allow method with address:", address);
-      const allowTx = await contract.allow(address);
-      await allowTx.wait();
-      console.log("Access granted successfully");
-      
-      // The allow method will usually share all files in the basic implementation
-      // If a shareFile method exists, call it for the specific file
-      setStatus("Sharing file...");
+      // Check if the contract has the shareFile method for individual file sharing
       if (typeof contract.shareFile === 'function') {
+        console.log(`Using shareFile method for file index ${fileIndex}`);
         const shareTx = await contract.shareFile(address, fileIndex);
         await shareTx.wait();
-        console.log("File shared using shareFile method");
+        console.log("File shared successfully");
       } else {
-        console.log("No specific shareFile method, relying on allow method");
+        // Fall back to global access if file-specific sharing is not available
+        console.log("shareFile method not available, falling back to allow method");
+        const tx = await contract.allow(address);
+        await tx.wait();
       }
       
-      // Refresh the list of shared addresses
+      // Refresh the shared addresses
       fetchSharedAddresses();
       
       setStatus("Success!");
       alert(`"${fileName}" has been shared with ${address}`);
       setAddress("");
+      
+      // Switch to manage tab
+      setActiveTab("manage");
     } catch (error) {
       console.error("Error sharing file:", error);
       setStatus("Failed!");
       
       let errorMessage = "Failed to share file. ";
       
-      if (error.message.includes("invalid address")) {
+      if (error.message?.includes("invalid address")) {
         errorMessage += "Invalid Ethereum address format.";
-      } else if (error.message.includes("execution reverted")) {
+      } else if (error.message?.includes("execution reverted")) {
         errorMessage += "Transaction was reverted by the contract.";
-      } else if (error.message.includes("gas")) {
-        errorMessage += "Transaction failed due to gas estimation. Try again.";
-      } else if (error.message.includes("method")) {
-        errorMessage += "Contract doesn't support this operation.";
+      } else if (error.message?.includes("cannot share with yourself")) {
+        errorMessage = "You cannot share files with yourself.";
       } else {
-        errorMessage += "Please try again.";
+        errorMessage += error.message || "Please try again.";
       }
       
       alert(errorMessage);
@@ -119,18 +131,49 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
         throw new Error("Contract doesn't have disallow method");
       }
       
-      const tx = await contract.disallow(addressToRevoke);
-      await tx.wait();
+      // Try specific file revocation first if the method exists
+      if (typeof contract.revokeFileAccess === 'function') {
+        try {
+          console.log(`Revoking specific file access for file ${fileIndex} from ${addressToRevoke}`);
+          const tx = await contract.revokeFileAccess(addressToRevoke, fileIndex);
+          await tx.wait();
+          console.log("File-specific revocation successful");
+        } catch (error) {
+          console.error("Error with file-specific revocation:", error);
+          // If file-specific revocation fails, try global access revocation
+          console.log("Falling back to global access revocation");
+          const tx = await contract.disallow(addressToRevoke);
+          await tx.wait();
+        }
+      } else {
+        // Fall back to global access revocation if file-specific isn't available
+        console.log(`Revoking global access from ${addressToRevoke}`);
+        const tx = await contract.disallow(addressToRevoke);
+        await tx.wait();
+      }
       
       // Refresh the list of shared addresses
-      fetchSharedAddresses();
+      setTimeout(() => {
+        fetchSharedAddresses();
+      }, 1000);
       
       setStatus("Access revoked!");
       alert(`Access for ${addressToRevoke} has been revoked`);
     } catch (error) {
       console.error("Error revoking access:", error);
       setStatus("Failed to revoke access!");
-      alert(`Failed to revoke access: ${error.message}`);
+      
+      // Provide more specific error message
+      let errorMessage = "Unknown error";
+      if (error.message?.includes("execution reverted")) {
+        errorMessage = "Transaction was reverted by the contract";
+      } else if (error.message?.includes("user rejected")) {
+        errorMessage = "Transaction was rejected by the user";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      alert(`Failed to revoke access: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -164,8 +207,7 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
         
         {activeTab === 'share' && (
           <div className="body">
-            <p>Share "{fileName}" with a specific user</p>
-            <p className="file-info">File Index: {fileIndex}</p>
+            <p>Share "{fileName}" with another user</p>
             <input
               type="text"
               className="address-input"
@@ -201,16 +243,21 @@ const FileShareModal = ({ setModalOpen, contract, fileIndex, fileName }) => {
           <div className="body">
             <p>Manage access for "{fileName}"</p>
             
-            {sharedAddresses.length > 0 ? (
+            {loading && !sharedAddresses.length ? (
+              <div className="loading-addresses">
+                <div className="loading-spinner" style={{ width: '30px', height: '30px' }}></div>
+                <p>Loading shared addresses...</p>
+              </div>
+            ) : sharedAddresses.length > 0 ? (
               <div className="shared-addresses-list">
-                {sharedAddresses.map((addr, idx) => (
+                {sharedAddresses.map((item, idx) => (
                   <div key={idx} className="shared-address-item">
-                    <span className="shared-address" title={addr}>
-                      {addr.slice(0, 8)}...{addr.slice(-6)}
+                    <span className="shared-address" title={item.address}>
+                      {item.displayAddress}
                     </span>
                     <button 
                       className="revoke-btn"
-                      onClick={() => revokeAccess(addr)}
+                      onClick={() => revokeAccess(item.address)}
                       disabled={loading}
                     >
                       Revoke

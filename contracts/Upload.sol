@@ -68,6 +68,9 @@ contract Upload {
    * @param user Address of the user to grant access
    */
   function allow(address user) external {
+      // Prevent sharing with self
+      require(user != msg.sender, "Cannot share with yourself");
+      
       // Set ownership mapping to true (grant access)
       ownership[msg.sender][user] = true; 
       
@@ -92,6 +95,9 @@ contract Upload {
    * @param user Address of the user to revoke access
    */
   function disallow(address user) public {
+      // Prevent operations on invalid addresses
+      require(user != address(0), "Invalid address");
+      
       // Set ownership mapping to false (revoke access)
       ownership[msg.sender][user] = false;
       
@@ -99,7 +105,14 @@ contract Upload {
       for (uint i = 0; i < accessList[msg.sender].length; i++) {
           if (accessList[msg.sender][i].user == user) { 
               accessList[msg.sender][i].access = false;  
+              break; // Exit loop once found
           }
+      }
+      
+      // Also revoke all individual file access permissions
+      uint fileCount = value[msg.sender].length;
+      for (uint i = 0; i < fileCount; i++) {
+          individualFileAccess[msg.sender][i][user] = false;
       }
       
       emit AccessRevoked(msg.sender, user);
@@ -202,15 +215,19 @@ contract Upload {
    */
   function shareFile(address user, uint fileIndex) external {
       require(fileIndex < value[msg.sender].length, "Invalid file index");
+      // Prevent sharing with self
+      require(user != msg.sender, "Cannot share with yourself");
       
       // Grant individual file access
       individualFileAccess[msg.sender][fileIndex][user] = true;
       
-      // Add to access list if not already present
+      // Add to access list if not already present, but DON'T grant global access
       if (!previousData[msg.sender][user]) {
-          accessList[msg.sender].push(Access(user, false));
+          accessList[msg.sender].push(Access(user, false)); // Note: access flag is false
           previousData[msg.sender][user] = true;
       }
+      
+      // Do NOT set ownership[msg.sender][user] = true since we only want file-specific access
       
       emit FileAccessGranted(msg.sender, user, fileIndex);
   }
@@ -284,5 +301,35 @@ contract Upload {
       require(isUser[_user], "User has no files");
       require(_user == msg.sender || ownership[_user][msg.sender], "Access denied");
       return value[_user];
+  }
+
+  /**
+   * @dev Get list of all users who have granted access to the caller
+   * @return Array of addresses that have shared with the caller
+   */
+  function getSharersWithMe() external view returns (address[] memory) {
+      // First, we need to determine the number of users who have shared with us
+      uint count = 0;
+      for (uint i = 0; i < totalUsers; i++) {
+          // Note: This is a simplified approach. In a real contract,
+          // you would need a proper way to iterate through all users.
+          address user = address(uint160(i + 1)); // Simple demo - not for production
+          if (ownership[user][msg.sender]) {
+              count++;
+          }
+      }
+      
+      // Now create and populate the array
+      address[] memory sharers = new address[](count);
+      uint index = 0;
+      for (uint i = 0; i < totalUsers; i++) {
+          address user = address(uint160(i + 1)); // Simple demo - not for production
+          if (ownership[user][msg.sender]) {
+              sharers[index] = user;
+              index++;
+          }
+      }
+      
+      return sharers;
   }
 }

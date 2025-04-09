@@ -1,140 +1,110 @@
 /* File Share Modal Styles */
 
 .modalBackground {
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 0, 0.5);
   position: fixed;
   top: 0;
   left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
-  justify-content: center;
   align-items: center;
-  z-index: 1000;
+  justify-content: center;
+  z-index: 1100;
 }
 
 .modalContainer {
+  background-color: white;
   width: 500px;
   max-width: 90%;
   border-radius: 12px;
-  background-color: white;
   box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  padding: 25px;
 }
 
 .titleCloseBtn {
   display: flex;
   justify-content: flex-end;
-  padding: 8px 10px 0px 10px;
+  margin-bottom: 8px;
 }
 
 .titleCloseBtn button {
-  background-color: transparent;
+  background: none;
   border: none;
   font-size: 24px;
   cursor: pointer;
   color: #6b7280;
-  transition: color 0.2s;
-}
-
-.titleCloseBtn button:hover {
-  color: #1f2937;
 }
 
 .title {
-  text-align: center;
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.3rem;
+  font-weight: 600;
   color: #1f2937;
-  margin-bottom: 1rem;
-  padding: 0 1.5rem;
-}
-
-.tab-container {
-  width: 100%;
-  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 16px;
+  text-align: center;
 }
 
 .tabs {
   display: flex;
-  justify-content: center;
-  gap: 10px;
-  padding: 0 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 20px;
 }
 
 .tab-btn {
-  padding: 10px 20px;
+  padding: 10px 15px;
+  flex: 1;
+  text-align: center;
+  background: none;
   border: none;
-  background-color: transparent;
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #6b7280;
   cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-}
-
-.tab-btn:hover {
-  color: #2563eb;
+  font-size: 0.95rem;
+  color: #6b7280;
 }
 
 .tab-btn.active {
   color: #2563eb;
-  font-weight: 600;
-}
-
-.tab-btn.active::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: #2563eb;
+  font-weight: 500;
+  border-bottom: 2px solid #2563eb;
 }
 
 .body {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 1.5rem;
+  margin-top: 10px;
 }
 
 .body p {
-  margin: 0 0 1rem 0;
-  text-align: center;
+  margin-bottom: 16px;
   color: #4b5563;
 }
 
 .file-info {
-  font-size: 0.8rem;
+  background-color: #f3f4f6;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
   color: #6b7280;
+  margin-bottom: 16px;
 }
 
 .address-input {
-  padding: 12px;
+  padding: 10px 12px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  margin-bottom: 1.5rem;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  margin-bottom: 16px;
   width: 100%;
-  transition: all 0.2s;
-}
-
-.address-input:focus {
-  border-color: #2563eb;
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
 .status-message {
-  text-align: center;
-  padding: 10px;
-  margin-bottom: 1rem;
+  padding: 8px;
   border-radius: 6px;
-  background-color: #dcfce7;
-  color: #166534;
+  text-align: center;
+  margin: 12px 0;
+  font-size: 0.9rem;
 }
 
 .status-message.error {
@@ -145,101 +115,75 @@
 .footer {
   display: flex;
   justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
-  margin-top: 1rem;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .footer button {
   padding: 8px 16px;
   border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  min-width: 100px;
-  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 500;
 }
 
-#cancelBtn, #doneBtn {
+.footer button:first-child {
   background-color: #f3f4f6;
+  color: #1f2937;
   border: 1px solid #d1d5db;
-  color: #4b5563;
 }
 
-#cancelBtn:hover, #doneBtn:hover {
-  background-color: #e5e7eb;
-}
-
-.footer button:last-child:not(#cancelBtn):not(#doneBtn) {
+.footer button:last-child {
   background-color: #2563eb;
-  border: none;
   color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.footer button:last-child:not(#cancelBtn):not(#doneBtn):hover {
-  background-color: #1d4ed8;
+  border: none;
 }
 
 .footer button:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .shared-addresses-list {
-  margin-bottom: 1.5rem;
-  max-height: 200px;
+  margin-top: 10px;
+  margin-bottom: 16px;
+  max-height: 180px;
   overflow-y: auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
 }
 
 .shared-address-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.shared-address-item:last-child {
-  border-bottom: none;
-}
-
-.shared-address {
-  font-family: monospace;
-  font-size: 0.9rem;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 8px;
 }
 
 .revoke-btn {
   background-color: #fee2e2;
   color: #b91c1c;
   border: none;
+  padding: 4px 8px;
   border-radius: 4px;
-  padding: 5px 10px;
   font-size: 0.85rem;
-  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 70px;
-  text-align: center;
 }
 
 .revoke-btn:hover {
   background-color: #fecaca;
 }
 
-.revoke-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .no-shared-addresses {
   text-align: center;
-  padding: 1.5rem;
+  padding: 20px 0;
   color: #6b7280;
+}
+
+.loading-addresses {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
 }

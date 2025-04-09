@@ -208,13 +208,13 @@
 
 .loading-spinner {
   display: inline-block;
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(0, 0, 0, 0.1);
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(37, 99, 235, 0.2);
   border-left-color: #2563eb;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
+  animation: spin 1s cubic-bezier(0.41, 0.26, 0.54, 0.94) infinite;
+  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -289,4 +289,61 @@
 
 .dialog-buttons button:last-child:hover {
   background-color: #b91c1c;
+}
+
+/* Shared Files Indicator */
+.shared-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: #2563eb;
+  color: white;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.file-owner {
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Empty state for shared files */
+.empty-shared-files {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background-color: #f9fafb;
+  border-radius: 12px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.empty-shared-files svg {
+  width: 64px;
+  height: 64px;
+  color: #9ca3af;
+  margin-bottom: 16px;
+}
+
+.empty-shared-files h4 {
+  font-size: 1.25rem;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.empty-shared-files p {
+  color: #6b7280;
+  max-width: 400px;
 }

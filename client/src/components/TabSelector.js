@@ -1,7 +1,7 @@
 import React from "react";
 import "./TabSelector.css";
 
-const TabSelector = ({ activeTab, setActiveTab }) => {
+const TabSelector = ({ activeTab, setActiveTab, sharedFilesAvailable }) => {
   return (
     <div className="tab-selector">
       <button
@@ -14,7 +14,8 @@ const TabSelector = ({ activeTab, setActiveTab }) => {
         className={`tab-button ${activeTab === "sharedFiles" ? "active" : ""}`}
         onClick={() => setActiveTab("sharedFiles")}
       >
-        Shared Files
+        Shared With Me
+        {sharedFilesAvailable && <span className="notification-dot"></span>}
       </button>
     </div>
   );

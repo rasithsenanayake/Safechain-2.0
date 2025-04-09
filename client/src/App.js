@@ -157,7 +157,12 @@ function App() {
       />
       
       {modalOpen && (
-        <Modal setModalOpen={setModalOpen} contract={contract}></Modal>
+        <Modal 
+          setModalOpen={setModalOpen} 
+          contract={contract}
+          triggerRefresh={triggerRefresh}
+          account={account}
+        />
       )}
 
       <main className="app-content">
@@ -179,6 +184,7 @@ function App() {
             <TabSelector 
               activeTab={activeTab} 
               setActiveTab={setActiveTab} 
+              sharedFilesAvailable={true} // You can make this dynamic based on actual data
             />
             
             <Display 
@@ -186,6 +192,7 @@ function App() {
               account={account} 
               activeTab={activeTab}
               refreshTrigger={refreshTrigger}
+              triggerRefresh={triggerRefresh}
             />
           </>
         )}
